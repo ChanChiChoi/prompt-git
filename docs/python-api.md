@@ -306,6 +306,141 @@ rendered = rule_based_render(template, {"question": "What is Python?"})
 
 ---
 
+## LLM Evaluator API
+
+### get_llm_config
+
+创建 LLM 配置对象。
+
+```python
+from promptgit.llm_evaluator import get_llm_config
+
+# OpenAI
+config = get_llm_config(provider="openai", model="gpt-4")
+
+# Anthropic
+config = get_llm_config(provider="anthropic", model="claude-3-opus-20240229")
+
+# Ollama 本地模型（自动设置 api_base=http://localhost:11434）
+config = get_llm_config(provider="ollama", model="llama2")
+
+# vLLM 本地模型（自动设置 api_base=http://localhost:8000/v1）
+config = get_llm_config(provider="vllm", model="meta-llama/Llama-2-7b-chat-hf")
+
+# SGLang 本地模型（自动设置 api_base=http://localhost:30000/v1）
+config = get_llm_config(provider="sglang", model="Qwen/Qwen2-7B-Instruct")
+
+# Azure OpenAI
+config = get_llm_config(provider="azure", model="gpt-4")
+
+# 自定义 API Base（代理或私有部署）
+config = get_llm_config(
+    provider="openai",
+    model="gpt-4",
+    api_base="https://your-proxy.com/v1",
+    api_key="sk-xxx"
+)
+```
+
+### evaluate_prompts_with_llm
+
+使用 LLM 评估两个 prompt 版本。
+
+```python
+from promptgit.llm_evaluator import get_llm_config, evaluate_prompts_with_llm
+from promptgit.evaluator import load_dataset
+from promptgit.schema import PromptTemplate
+from pathlib import Path
+
+old_template = PromptTemplate.from_yaml(Path("old.yaml"))
+new_template = PromptTemplate.from_yaml(Path("new.yaml"))
+dataset = load_dataset(Path("dataset.jsonl"))
+
+# 基本 LLM 评估（使用相似度匹配）
+config = get_llm_config("openai", "gpt-3.5-turbo")
+result = evaluate_prompts_with_llm(
+    old_template, new_template, dataset, config, threshold=0.05
+)
+
+# LLM-as-judge 评估（更准确）
+result = evaluate_prompts_with_llm(
+    old_template, new_template, dataset, config,
+    threshold=0.05, use_judge=True
+)
+
+# 使用独立的 Judge 模型（推荐：小模型生成，大模型评判）
+gen_config = get_llm_config("openai", "gpt-3.5-turbo")
+judge_config = get_llm_config("openai", "gpt-4")
+result = evaluate_prompts_with_llm(
+    old_template, new_template, dataset, gen_config,
+    threshold=0.05, use_judge=True, judge_config=judge_config
+)
+
+# 访问结果
+print(result.accuracy_delta)
+print(result.passed)
+print(len(result.judge_results))  # Judge 评分详情
+```
+
+### compare_models
+
+对比两个模型在同一数据集上的表现。
+
+```python
+from promptgit.llm_evaluator import get_llm_config, compare_models
+from promptgit.evaluator import load_dataset
+from promptgit.schema import PromptTemplate
+from pathlib import Path
+
+template = PromptTemplate.from_yaml(Path("prompt.yaml"))
+dataset = load_dataset(Path("dataset.jsonl"))
+
+# 同提供商对比
+config_a = get_llm_config("openai", "gpt-3.5-turbo")
+config_b = get_llm_config("openai", "gpt-4")
+results = compare_models(template, dataset, config_a, config_b)
+
+# 跨提供商对比
+config_a = get_llm_config("openai", "gpt-4")
+config_b = get_llm_config("anthropic", "claude-3-opus-20240229")
+results = compare_models(template, dataset, config_a, config_b)
+
+# 访问结果
+for r in results:
+    print(f"{r.model_a}: {r.score_a:.2f} vs {r.model_b}: {r.score_b:.2f} → Winner: {r.winner}")
+```
+
+### LLMConfig
+
+```python
+from promptgit.llm_evaluator import LLMConfig
+
+config = LLMConfig(
+    provider="openai",       # 提供商
+    model="gpt-4",           # 模型名
+    temperature=0.0,         # 温度
+    max_tokens=1024,         # 最大 token
+    api_key="sk-xxx",        # API Key（可选，自动从环境变量读取）
+    api_base="https://...",  # API Base（可选，本地模型自动设置）
+)
+
+# 转换为 LiteLLM 格式
+litellm_model = config.to_litellm_model()  # "openai/gpt-4"
+```
+
+### 类型定义
+
+```python
+from promptgit.llm_evaluator import (
+    LLMConfig,          # LLM 配置
+    LLMJudgeResult,     # Judge 评分结果: score, reasoning, raw_response
+    LLMCompareResult,   # 模型对比结果: model_a/b, score_a/b, winner, reasoning
+    LLMEvalResult,      # LLM 评估结果: accuracy, token_cost, judge_results 等
+)
+```
+
+---
+
 ## CI Generator API
 
 ### generate_workflow
@@ -490,6 +625,13 @@ from promptgit.evaluator import (
     SampleResult,   # Dataclass: 单个样本结果
     EvalResult,     # Dataclass: 完整评估结果
     RenderFunction, # Type: Callable[[str, dict], str]
+)
+
+from promptgit.llm_evaluator import (
+    LLMConfig,          # Dataclass: LLM 配置
+    LLMJudgeResult,     # Dataclass: Judge 评分结果
+    LLMCompareResult,   # Dataclass: 模型对比结果
+    LLMEvalResult,      # Dataclass: LLM 评估完整结果
 )
 ```
 

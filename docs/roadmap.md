@@ -33,7 +33,9 @@
 - ✅ 一致性评分
 - ✅ LLM 增强评估（LiteLLM 集成）
 - ✅ LLM-as-judge 评估模式
-- ✅ 多模型对比评估
+- ✅ 独立 Judge 模型支持
+- ✅ 多模型对比评估（跨提供商）
+- ✅ 多提供商支持：OpenAI / Anthropic / Azure / Ollama / vLLM / SGLang
 
 **CI/CD：**
 - ✅ GitHub Actions 模板
@@ -50,9 +52,13 @@
 
 ```
 [x] 集成 LiteLLM
-[x] 支持 OpenAI / Anthropic / 本地模型
+[x] 支持 OpenAI / Anthropic / Azure / 本地模型（Ollama / vLLM / SGLang）
 [x] LLM-as-judge 评估模式
-[x] 多模型对比评估
+[x] 独立 Judge 模型支持（生成与评判使用不同 LLM）
+[x] 多模型对比评估（支持跨提供商 provider:model 格式）
+[x] --api-base 自定义 API Base URL
+[x] --fail-on diff 风险等级阈值
+[x] PROMPT_GIT_THRESHOLD / PROMPT_GIT_MODEL 环境变量支持
 ```
 
 **使用场景：**
@@ -63,8 +69,20 @@ pg eval --dataset data.jsonl --provider openai --model gpt-4
 # 使用 LLM-as-judge 评估
 pg eval --dataset data.jsonl --provider openai --model gpt-4 --judge
 
-# 对比不同模型
-pg eval --dataset data.jsonl --compare-models gpt-3.5,gpt-4
+# 独立 Judge 模型（小模型生成，大模型评判）
+pg eval --dataset data.jsonl --provider openai --model gpt-3.5-turbo --judge --judge-model gpt-4
+
+# 对比不同模型（同提供商）
+pg eval --dataset data.jsonl --compare-models gpt-3.5-turbo,gpt-4
+
+# 对比不同模型（跨提供商）
+pg eval --dataset data.jsonl --compare-models openai:gpt-4,anthropic:claude-3-opus-20240229
+
+# 使用本地模型
+pg eval --dataset data.jsonl --provider ollama --model llama2
+
+# Diff 风险阈值（用于 CI/pre-commit）
+pg diff --fail-on=high
 ```
 
 ### v0.2.1 - 增强 Diff

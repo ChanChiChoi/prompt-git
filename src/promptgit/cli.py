@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -279,6 +280,9 @@ def diff(
     json_output: bool = typer.Option(
         False, "--json", "-j", help="Output diff as JSON."
     ),
+    fail_on: Optional[str] = typer.Option(
+        None, "--fail-on", help="Exit with error if risk level >= this value (low/med/high)."
+    ),
 ) -> None:
     """Show diff between current prompts and HEAD.
 
@@ -414,6 +418,21 @@ def diff(
     except GitCommandError as e:
         error_exit(f"Git diff failed: {e}", ERR_GIT)
 
+    # --fail-on: exit with error if any result meets or exceeds the threshold
+    if fail_on:
+        risk_order = {"low": 0, "med": 1, "high": 2}
+        threshold_level = risk_order.get(fail_on.lower())
+        if threshold_level is None:
+            error_exit(f"Invalid --fail-on value: {fail_on}. Use low/med/high.", ERR_ARGS)
+
+        for f, result in results:
+            result_level = risk_order.get(result.risk_level.value, 0)
+            if result_level >= threshold_level:
+                console.print(
+                    f"[red]✗ Diff FAILED: {f} has risk level {result.risk_level.value} (threshold: {fail_on})[/red]"
+                )
+                raise typer.Exit(code=2)
+
 
 def _risk_style(risk) -> str:
     """Apply color to risk level."""
@@ -439,7 +458,7 @@ def eval(
         None, "--new", help="New prompt file (default: current version)."
     ),
     threshold: float = typer.Option(
-        0.05, "--threshold", "-t", help="Accuracy drop threshold (0-1)."
+        None, "--threshold", "-t", help="Accuracy drop threshold (0-1). Default: env PROMPT_GIT_THRESHOLD or 0.05."
     ),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON."),
     provider: Optional[str] = typer.Option(
@@ -448,11 +467,21 @@ def eval(
     model: Optional[str] = typer.Option(
         None, "--model", "-m", help="LLM model name (e.g., gpt-4, claude-2, llama2)."
     ),
+    api_base: Optional[str] = typer.Option(
+        None, "--api-base", help="Custom API base URL (for proxies or local models)."
+    ),
     compare_models: Optional[str] = typer.Option(
-        None, "--compare-models", "-c", help="Compare multiple models (comma-separated)."
+        None, "--compare-models", "-c",
+        help="Compare models. Format: 'model1,model2' or 'provider1:model1,provider2:model2'"
     ),
     use_judge: bool = typer.Option(
         False, "--judge", help="Use LLM-as-judge for evaluation."
+    ),
+    judge_provider: Optional[str] = typer.Option(
+        None, "--judge-provider", help="Judge LLM provider (if different from main provider)."
+    ),
+    judge_model: Optional[str] = typer.Option(
+        None, "--judge-model", help="Judge LLM model (e.g., gpt-4 for judging gpt-3.5 outputs)."
     ),
 ) -> None:
     """Evaluate prompt versions against a dataset.
@@ -463,6 +492,7 @@ def eval(
     Use --provider and --model to enable LLM-based evaluation.
     Use --compare-models to compare multiple models (e.g., gpt-3.5,gpt-4).
     Use --judge to enable LLM-as-judge scoring.
+    Use --judge-model to specify a different (usually stronger) model for judging.
     """
     from promptgit.evaluator import load_dataset, evaluate_prompts
     from promptgit.llm_evaluator import (
@@ -471,6 +501,16 @@ def eval(
         compare_models as compare_models_fn,
         LLMCompareResult,
     )
+
+    # Resolve env var defaults
+    if threshold is None:
+        env_threshold = os.environ.get("PROMPT_GIT_THRESHOLD")
+        threshold = float(env_threshold) if env_threshold else 0.05
+
+    if provider is None:
+        env_provider = os.environ.get("PROMPT_GIT_MODEL")
+        if env_provider and env_provider != "none":
+            provider = env_provider
 
     repo = get_repo()
     prompts_dir = get_prompts_dir(repo)
@@ -526,25 +566,41 @@ def eval(
 
     # Model comparison mode
     if compare_models:
-        model_list = [m.strip() for m in compare_models.split(",")]
-        if len(model_list) < 2:
+        model_entries = [m.strip() for m in compare_models.split(",")]
+        if len(model_entries) < 2:
             error_exit("Please provide at least 2 models for comparison.", ERR_ARGS)
 
-        console.print(f"[bold]Comparing models: {', '.join(model_list)}[/bold]")
+        # Parse provider:model format
+        def parse_model_entry(entry: str, default_provider: str) -> tuple[str, str]:
+            """Parse 'provider:model' or just 'model' format."""
+            if ":" in entry:
+                parts = entry.split(":", 1)
+                return parts[0], parts[1]
+            return default_provider, entry
 
-        # Compare first two models (extensible for more)
-        config_a = get_llm_config(provider or "openai", model_list[0])
-        config_b = get_llm_config(provider or "openai", model_list[1])
+        default_provider = provider or "openai"
+        provider_a, model_a = parse_model_entry(model_entries[0], default_provider)
+        provider_b, model_b = parse_model_entry(model_entries[1], default_provider)
+
+        console.print(f"[bold]Comparing models: {provider_a}/{model_a} vs {provider_b}/{model_b}[/bold]")
+
+        # Create configs for each model
+        config_a = get_llm_config(provider_a, model_a, api_base=api_base)
+        config_b = get_llm_config(provider_b, model_b, api_base=api_base)
 
         compare_results = compare_models_fn(
             new_template, samples, config_a, config_b
         )
 
+        # Format display names
+        display_a = f"{provider_a}/{model_a}"
+        display_b = f"{provider_b}/{model_b}"
+
         # Output comparison results
         if json_output:
             output = {
-                "model_a": model_list[0],
-                "model_b": model_list[1],
+                "model_a": {"provider": provider_a, "model": model_a},
+                "model_b": {"provider": provider_b, "model": model_b},
                 "results": [r.to_dict() for r in compare_results],
                 "summary": {
                     "wins_a": sum(1 for r in compare_results if r.winner == "A"),
@@ -556,14 +612,14 @@ def eval(
         else:
             table = Table(title="Model Comparison", show_lines=True)
             table.add_column("Sample", style="cyan")
-            table.add_column(f"Score ({model_list[0]})", style="white")
-            table.add_column(f"Score ({model_list[1]})", style="white")
+            table.add_column(f"Score ({display_a})", style="white")
+            table.add_column(f"Score ({display_b})", style="white")
             table.add_column("Winner", style="bold")
 
             for i, result in enumerate(compare_results, 1):
                 winner_style = {
-                    "A": f"[green]{model_list[0]}[/green]",
-                    "B": f"[green]{model_list[1]}[/green]",
+                    "A": f"[green]{display_a}[/green]",
+                    "B": f"[green]{display_b}[/green]",
                     "Tie": "[yellow]Tie[/yellow]",
                 }.get(result.winner, result.winner)
 
@@ -582,11 +638,11 @@ def eval(
             ties = sum(1 for r in compare_results if r.winner == "Tie")
 
             console.print(f"\n[bold]Summary:[/bold]")
-            console.print(f"  {model_list[0]} wins: {wins_a}")
-            console.print(f"  {model_list[1]} wins: {wins_b}")
+            console.print(f"  {display_a} wins: {wins_a}")
+            console.print(f"  {display_b} wins: {wins_b}")
             console.print(f"  Ties: {ties}")
 
-            overall_winner = model_list[0] if wins_a > wins_b else model_list[1] if wins_b > wins_a else "Tie"
+            overall_winner = display_a if wins_a > wins_b else display_b if wins_b > wins_a else "Tie"
             console.print(f"\n[bold green]Overall winner: {overall_winner}[/bold green]")
 
         # Cleanup temp file
@@ -596,12 +652,23 @@ def eval(
 
     # LLM evaluation mode
     if provider and model:
-        config = get_llm_config(provider, model)
+        config = get_llm_config(provider, model, api_base=api_base)
 
-        console.print(f"[bold]Using LLM evaluation: {provider}/{model}[/bold]")
+        # Configure judge model if specified
+        judge_config = None
+        if use_judge and (judge_provider or judge_model):
+            judge_config = get_llm_config(
+                judge_provider or provider,
+                judge_model or model,
+                api_base=api_base,
+            )
+            console.print(f"[bold]Using LLM evaluation: {provider}/{model}[/bold]")
+            console.print(f"[bold]Using Judge model: {judge_provider or provider}/{judge_model or model}[/bold]")
+        else:
+            console.print(f"[bold]Using LLM evaluation: {provider}/{model}[/bold]")
 
         result = evaluate_prompts_with_llm(
-            old_template, new_template, samples, config, threshold, use_judge
+            old_template, new_template, samples, config, threshold, use_judge, judge_config
         )
     else:
         # Rule-based evaluation (default)

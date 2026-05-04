@@ -22,7 +22,7 @@
 
 ```json
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "created_at": "2026-05-04T10:30:00",
   "eval_threshold": 0.05,
   "model_provider": "openai",
@@ -36,7 +36,7 @@
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `version` | string | `"0.1.0"` | 配置版本 |
+| `version` | string | `"0.2.0"` | 配置版本 |
 | `created_at` | string | 当前时间 | 创建时间（ISO 8601） |
 | `eval_threshold` | float | `0.05` | 评估阈值（0-1） |
 | `model_provider` | string | `"none"` | LLM 提供商 |
@@ -69,7 +69,10 @@
 | `none` | 不使用 LLM（默认） | 否 |
 | `openai` | OpenAI GPT | 是 |
 | `anthropic` | Anthropic Claude | 是 |
-| `local` | 本地模型 | 否 |
+| `azure` | Azure OpenAI | 是 |
+| `ollama` | Ollama 本地模型 | 否 |
+| `vllm` | vLLM 本地模型 | 否 |
+| `sglang` | SGLang 本地模型 | 否 |
 
 ---
 
@@ -79,13 +82,17 @@
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `PROMPT_GIT_MODEL` | LLM 模型 | `none` |
-| `PROMPT_GIT_THRESHOLD` | 评估阈值 | `0.05` |
+| `PROMPT_GIT_MODEL` | LLM 提供商（`pg eval --provider` 的默认值） | `none` |
+| `PROMPT_GIT_THRESHOLD` | 评估阈值（`pg eval --threshold` 的默认值） | `0.05` |
 | `OPENAI_API_KEY` | OpenAI API Key | - |
 | `OPENAI_API_BASE` | OpenAI API Base URL | `https://api.openai.com/v1` |
 | `ANTHROPIC_API_KEY` | Anthropic API Key | - |
+| `AZURE_API_KEY` | Azure OpenAI API Key | - |
+| `OLLAMA_API_KEY` | Ollama API Key（本地模型通常不需要） | - |
 | `OLLAMA_API_BASE` | Ollama API Base URL | `http://localhost:11434` |
+| `VLLM_API_KEY` | vLLM API Key（本地模型通常不需要） | - |
 | `VLLM_API_BASE` | vLLM API Base URL | `http://localhost:8000/v1` |
+| `SGLANG_API_KEY` | SGLang API Key（本地模型通常不需要） | - |
 | `SGLANG_API_BASE` | SGLang API Base URL | `http://localhost:30000/v1` |
 
 ### 设置方式
@@ -361,10 +368,10 @@ result = evaluate_prompts_with_llm(
 |--------|--------------|---------------|----------|----------|
 | OpenAI | `openai` | `https://api.openai.com/v1` | `OPENAI_API_KEY` | `gpt-4`, `gpt-3.5-turbo` |
 | Anthropic | `anthropic` | - | `ANTHROPIC_API_KEY` | `claude-3-opus-20240229` |
-| Ollama | `ollama` | `http://localhost:11434` | 无需 | `llama2`, `mistral`, `qwen2` |
-| vLLM | `vllm` | `http://localhost:8000/v1` | 无需 | `meta-llama/Llama-2-7b-chat-hf` |
-| SGLang | `sglang` | `http://localhost:30000/v1` | 无需 | `Qwen/Qwen2-7B-Instruct` |
 | Azure OpenAI | `azure` | - | `AZURE_API_KEY` | `gpt-4` |
+| Ollama | `ollama` | `http://localhost:11434` | `OLLAMA_API_KEY`（可选） | `llama2`, `mistral`, `qwen2` |
+| vLLM | `vllm` | `http://localhost:8000/v1` | `VLLM_API_KEY`（可选） | `meta-llama/Llama-2-7b-chat-hf` |
+| SGLang | `sglang` | `http://localhost:30000/v1` | `SGLANG_API_KEY`（可选） | `Qwen/Qwen2-7B-Instruct` |
 
 ### 自定义 API Base
 
@@ -414,8 +421,14 @@ pg eval --dataset data.jsonl --provider openai --model gpt-4 --judge
 比较不同模型的表现：
 
 ```bash
-# 对比 GPT-3.5 和 GPT-4
+# 对比同一厂商的模型
 pg eval --dataset data.jsonl --compare-models gpt-3.5-turbo,gpt-4
+
+# 对比不同厂商的模型（使用 provider:model 格式）
+pg eval --dataset data.jsonl --compare-models openai:gpt-4,anthropic:claude-3-opus-20240229
+
+# 对比本地模型和云端模型
+pg eval --dataset data.jsonl --compare-models ollama:llama2,openai:gpt-4
 ```
 
 ### 成本控制

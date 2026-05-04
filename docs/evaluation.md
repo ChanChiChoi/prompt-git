@@ -752,15 +752,53 @@ config = get_llm_config(
 
 #### LLM-as-Judge 模式
 
-使用 LLM 作为评判者，更准确地评估输出质量：
+使用 LLM 作为评判者，更准确地评估输出质量。
+
+**重要：建议使用不同的模型进行生成和评判**
+
+最佳实践是使用更强的模型作为 Judge，以避免自我偏见：
 
 ```bash
-# 启用 LLM-as-judge
-pg eval --dataset data.jsonl --provider openai --model gpt-4 --judge
+# 使用 gpt-3.5 生成输出，gpt-4 作为 Judge
+pg eval --dataset data.jsonl \
+  --provider openai --model gpt-3.5-turbo \
+  --judge \
+  --judge-provider openai --judge-model gpt-4
 
-# JSON 输出（用于 CI）
-pg eval --dataset data.jsonl --provider openai --model gpt-4 --judge --json
+# 使用本地模型生成，云端模型作为 Judge
+pg eval --dataset data.jsonl \
+  --provider ollama --model llama2 \
+  --judge \
+  --judge-provider openai --judge-model gpt-4
+
+# 使用同一个模型（不推荐，但可用于快速测试）
+pg eval --dataset data.jsonl --provider openai --model gpt-4 --judge
 ```
+
+**为什么需要不同的 Judge 模型？**
+
+| 问题 | 说明 |
+|------|------|
+| 自我偏见 | LLM 可能倾向于给自己的输出打高分 |
+| 盲点相似 | 同一模型可能忽略相同的错误模式 |
+| 评估公平性 | 用更强的模型能更准确地评估弱模型 |
+
+**推荐的 Judge 模型组合：**
+
+| 生成模型 | 推荐 Judge | 原因 |
+|----------|-----------|------|
+| gpt-3.5-turbo | gpt-4 | GPT-4 更擅长发现错误 |
+| llama2/mistral | gpt-4 或 claude-3 | 云端大模型更可靠 |
+| gpt-4 | claude-3-opus | 不同厂商的视角 |
+| claude-3-sonnet | claude-3-opus | 更强的同系列模型 |
+
+**CLI 参数：**
+
+| 参数 | 说明 |
+|------|------|
+| `--judge` | 启用 LLM-as-judge 模式 |
+| `--judge-provider` | Judge 模型的提供商（可选，默认与主模型相同） |
+| `--judge-model` | Judge 模型名称（可选，默认与主模型相同） |
 
 **Judge 评分标准：**
 - 1.0：完美匹配期望输出
@@ -774,15 +812,31 @@ pg eval --dataset data.jsonl --provider openai --model gpt-4 --judge --json
 比较不同模型在同一数据集上的表现：
 
 ```bash
-# 对比 GPT-3.5 和 GPT-4
+# 对比同一厂商的模型
 pg eval --dataset data.jsonl --compare-models gpt-3.5-turbo,gpt-4
 
-# 对比 OpenAI 和 Anthropic
-pg eval --dataset data.jsonl --provider openai --compare-models gpt-4,claude-3-opus-20240229
+# 对比不同厂商的模型（使用 provider:model 格式）
+pg eval --dataset data.jsonl --compare-models openai:gpt-4,anthropic:claude-3-opus-20240229
+
+# 对比本地模型和云端模型
+pg eval --dataset data.jsonl --compare-models ollama:llama2,openai:gpt-4
+
+# 对比 vLLM 和 SGLang
+pg eval --dataset data.jsonl --compare-models vllm:llama2,sglang:qwen2-7b
 
 # JSON 输出
-pg eval --dataset data.jsonl --compare-models gpt-3.5-turbo,gpt-4 --json
+pg eval --dataset data.jsonl --compare-models openai:gpt-4,anthropic:claude-3-opus-20240229 --json
 ```
+
+**模型格式说明：**
+
+| 格式 | 示例 | 说明 |
+|------|------|------|
+| `model` | `gpt-4` | 使用默认 provider（需要指定 `--provider`） |
+| `provider:model` | `openai:gpt-4` | 显式指定 provider |
+| `provider:model` | `anthropic:claude-3-opus-20240229` | 不同厂商 |
+
+**注意：** 对比不同厂商的模型时，必须使用 `provider:model` 格式，因为每个厂商的 API 地址和认证方式不同。
 
 **输出示例：**
 ```

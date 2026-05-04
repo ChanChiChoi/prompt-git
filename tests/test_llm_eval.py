@@ -57,6 +57,11 @@ class TestLLMConfig:
         config = LLMConfig(provider="ollama", model="llama2")
         assert config.to_litellm_model() == "ollama/llama2"
 
+    def test_to_litellm_model_azure(self):
+        """Test LiteLLM model format for Azure."""
+        config = LLMConfig(provider="azure", model="gpt-4")
+        assert config.to_litellm_model() == "azure/gpt-4"
+
     def test_to_litellm_model_unknown(self):
         """Test LiteLLM model format for unknown provider."""
         config = LLMConfig(provider="custom", model="my-model")
@@ -122,6 +127,12 @@ class TestGetLLMConfig:
         monkeypatch.setenv("OPENAI_API_KEY", "env-key")
         config = get_llm_config("openai", "gpt-4", api_key="explicit-key")
         assert config.api_key == "explicit-key"
+
+    def test_env_var_azure(self, monkeypatch):
+        """Test auto-detection of Azure API key from environment."""
+        monkeypatch.setenv("AZURE_API_KEY", "azure-key-789")
+        config = get_llm_config("azure", "gpt-4")
+        assert config.api_key == "azure-key-789"
 
 
 # ============================================================

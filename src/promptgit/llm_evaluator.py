@@ -41,6 +41,7 @@ class LLMConfig:
             "ollama": "ollama/",
             "vllm": "openai/",  # vLLM uses OpenAI-compatible API
             "sglang": "openai/",  # SGLang uses OpenAI-compatible API
+            "azure": "azure/",
             "huggingface": "huggingface/",
         }
         prefix = provider_prefixes.get(self.provider, "")
@@ -160,6 +161,7 @@ def get_llm_config(
             "ollama": "OLLAMA_API_KEY",
             "vllm": "VLLM_API_KEY",
             "sglang": "SGLANG_API_KEY",
+            "azure": "AZURE_API_KEY",
         }
         env_var = env_keys.get(provider)
         if env_var:
@@ -316,6 +318,7 @@ def evaluate_prompts_with_llm(
     config: LLMConfig,
     threshold: float = 0.05,
     use_judge: bool = False,
+    judge_config: Optional[LLMConfig] = None,
 ) -> LLMEvalResult:
     """Evaluate prompts using LLM.
 
@@ -323,15 +326,19 @@ def evaluate_prompts_with_llm(
         old_template: Original prompt template
         new_template: New prompt template
         dataset: List of evaluation samples
-        config: LLM configuration
+        config: LLM configuration for generating outputs
         threshold: Accuracy drop threshold
         use_judge: Whether to use LLM-as-judge for scoring
+        judge_config: Optional separate LLM config for judge (if None, uses config)
 
     Returns:
         LLMEvalResult with metrics
     """
     if not dataset:
         raise ValueError("Dataset is empty, cannot evaluate.")
+
+    # Use separate judge config if provided, otherwise use same config
+    judge_llm_config = judge_config if judge_config else config
 
     details = []
     judge_results = []
@@ -361,9 +368,9 @@ def evaluate_prompts_with_llm(
 
         # Evaluate match
         if use_judge:
-            # Use LLM-as-judge
-            old_judge = llm_judge_evaluate(config, old_rendered, sample.expected_output, old_output)
-            new_judge = llm_judge_evaluate(config, new_rendered, sample.expected_output, new_output)
+            # Use LLM-as-judge (potentially different model)
+            old_judge = llm_judge_evaluate(judge_llm_config, old_rendered, sample.expected_output, old_output)
+            new_judge = llm_judge_evaluate(judge_llm_config, new_rendered, sample.expected_output, new_output)
 
             old_match = old_judge.score >= 0.7
             new_match = new_judge.score >= 0.7

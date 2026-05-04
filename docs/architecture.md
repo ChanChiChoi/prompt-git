@@ -55,24 +55,24 @@ prompt-git-manager 是一个 Git 原生的 Prompt 版本控制工具，核心理
 └──────────────────────────────────────────────────────────────────┘
                                   │
                                   ▼
-┌──────────────────────────────────────────────────────────────────┐
-│                         Core Layer                                │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
-│  │  schema.py   │  │diff_engine.py│  │ evaluator.py │           │
-│  │              │  │              │  │              │           │
-│  │ PromptTemplate│  │ 结构化 Diff  │  │ 数据集评估   │           │
-│  │ CommitRecord │  │ 语义分析     │  │ 指标计算     │           │
-│  └──────────────┘  └──────────────┘  └──────────────┘           │
-└──────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                              Core Layer                                   │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ │
+│  │  schema.py   │  │diff_engine.py│  │ evaluator.py │  │llm_evaluator │ │
+│  │              │  │              │  │              │  │              │ │
+│  │ PromptTemplate│  │ 结构化 Diff  │  │ 规则评估     │  │ LLM 评估     │ │
+│  │ CommitRecord │  │ 语义分析     │  │ 指标计算     │  │ Judge 模式   │ │
+│  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘ │
+└──────────────────────────────────────────────────────────────────────────┘
                                   │
                                   ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │                       Utility Layer                               │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
-│  │  utils.py    │  │  ci_gen.py   │  │  ci_guard.py │           │
+│  │  utils.py    │  │  ci_gen.py   │  │              │           │
 │  │              │  │              │  │              │           │
-│  │ Git 操作     │  │ YAML 生成    │  │ CI 拦截逻辑  │           │
-│  │ Rich 渲染    │  │ Pre-commit   │  │ PR 评论      │           │
+│  │ Git 操作     │  │ YAML 生成    │  │              │           │
+│  │ Rich 渲染    │  │ Pre-commit   │  │              │           │
 │  └──────────────┘  └──────────────┘  └──────────────┘           │
 └──────────────────────────────────────────────────────────────────┘
                                   │
@@ -92,9 +92,9 @@ prompt-git-manager 是一个 Git 原生的 Prompt 版本控制工具，核心理
 | `cli.py` | CLI 入口，命令定义，用户交互 | `app`, `init()`, `add()`, `commit()`, `diff()`, `eval()` |
 | `schema.py` | 数据模型定义，YAML/JSON 解析验证 | `PromptTemplate`, `CommitRecord` |
 | `diff_engine.py` | 结构化 Diff，语义分析，风险评估 | `diff_prompts()`, `DiffResult`, `RiskLevel` |
-| `evaluator.py` | 数据集加载，模板渲染，指标计算 | `evaluate_prompts()`, `EvalResult` |
+| `evaluator.py` | 规则评估，数据集加载，模板渲染，指标计算 | `evaluate_prompts()`, `EvalResult`, `rule_based_render()` |
+| `llm_evaluator.py` | LLM 评估引擎，Judge 模式，多模型对比 | `evaluate_prompts_with_llm()`, `compare_models()`, `LLMConfig` |
 | `ci_gen.py` | GitHub Actions YAML 生成 | `generate_workflow()`, `init_ci()` |
-| `ci_guard.py` | CI 拦截逻辑，PR 评论生成 | `run_ci_guard()` |
 | `utils.py` | Git 操作封装，Rich 输出，错误处理 | `get_repo()`, `render_table()`, `error_exit()` |
 
 ---
@@ -173,6 +173,49 @@ class EvalResult:
     passed: bool                 # 是否通过阈值
     threshold: float             # 阈值设置
     details: list[SampleResult]  # 每个样本的详细结果
+```
+
+### LLMConfig
+
+```python
+@dataclass
+class LLMConfig:
+    provider: str = "openai"        # 提供商: openai/anthropic/azure/ollama/vllm/sglang
+    model: str = "gpt-3.5-turbo"   # 模型名称
+    temperature: float = 0.0
+    max_tokens: int = 1024
+    api_key: Optional[str] = None
+    api_base: Optional[str] = None
+```
+
+### LLMJudgeResult
+
+```python
+@dataclass
+class LLMJudgeResult:
+    score: float           # 0.0 - 1.0
+    reasoning: str         # 评分理由
+    raw_response: str      # LLM 原始响应
+```
+
+### LLMEvalResult
+
+```python
+@dataclass
+class LLMEvalResult:
+    total_samples: int
+    accuracy_old: float
+    accuracy_new: float
+    accuracy_delta: float
+    token_cost_old: int
+    token_cost_new: int
+    token_cost_delta: float
+    consistency_score: float
+    passed: bool
+    threshold: float
+    details: list[SampleResult]
+    judge_results: list[LLMJudgeResult]
+    compare_results: list[LLMCompareResult]
 ```
 
 ---
@@ -339,7 +382,7 @@ pg diff [--semantic]
 ```
 用户输入                    处理流程                     输出
 ────────                    ──────────                   ──────
-pg eval --dataset data.jsonl
+pg eval --dataset data.jsonl [--provider openai --model gpt-4 --judge]
     │
     ▼
 ┌─────────────────────────┐
@@ -352,45 +395,33 @@ pg eval --dataset data.jsonl
 │ 读取当前 new 版本       │  ──→ new_template
 └─────────────────────────┘
     │
-    ▼
-┌─────────────────────────────────────────────────────────┐
-│                    evaluate_prompts()                     │
-│                                                          │
-│  FOR EACH sample IN dataset:                             │
-│  ┌───────────────────────────────────────────────────┐ │
-│  │ 1. rule_based_render(template, variables)         │ │
-│  │    └─→ 替换 {{var}} 占位符                         │ │
-│  └───────────────────────────────────────────────────┘ │
-│  ┌───────────────────────────────────────────────────┐ │
-│  │ 2. estimate_tokens(rendered_text)                 │ │
-│  │    └─→ 估算 token 数量                            │ │
-│  └───────────────────────────────────────────────────┘ │
-│  ┌───────────────────────────────────────────────────┐ │
-│  │ 3. keyword_based_evaluate(prompt, expected)        │ │
-│  │    ├─ extract_keywords(expected)                   │ │
-│  │    ├─ 匹配 prompt 中的关键词                       │ │
-│  │    └─→ (simulated_output, is_match)               │ │
-│  └───────────────────────────────────────────────────┘ │
-│                                                          │
-│  END FOR                                                 │
-│                                                          │
-│  计算聚合指标：                                          │
-│  ├─ accuracy = correct / total                           │
-│  ├─ token_cost_delta = (new - old) / old                 │
-│  └─ consistency = matches / total                        │
-└─────────────────────────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────┐
-│   EvalResult    │
-│  ├─ accuracy    │  ──→ 准确率变化
-│  ├─ token_cost  │  ──→ 成本变化
-│  ├─ consistency │  ──→ 一致性分数
-│  └─ passed      │  ──→ 是否通过阈值
-└─────────────────┘
-    │
-    ▼
-  Rich 表格 或 JSON 输出
+    ├──────── 无 --provider ──────────────────── 有 --provider ──────┐
+    ▼                                                                ▼
+┌──────────────────────────────┐              ┌───────────────────────────────┐
+│    evaluate_prompts()        │              │  evaluate_prompts_with_llm()  │
+│    (规则引擎)                │              │  (LLM 增强)                   │
+│                              │              │                               │
+│  FOR EACH sample:            │              │  FOR EACH sample:             │
+│    1. rule_based_render      │              │    1. rule_based_render       │
+│    2. keyword_match          │              │    2. llm_generate_output     │
+│    3. estimate_tokens        │              │    3. similarity / judge      │
+│                              │              │                               │
+│  聚合指标                    │              │  聚合指标                     │
+└──────────────────────────────┘              └───────────────────────────────┘
+    │                                                │
+    └────────────────────┬───────────────────────────┘
+                         ▼
+              ┌─────────────────┐
+              │   EvalResult /  │
+              │   LLMEvalResult │
+              │  ├─ accuracy    │  ──→ 准确率变化
+              │  ├─ token_cost  │  ──→ 成本变化
+              │  ├─ consistency │  ──→ 一致性分数
+              │  └─ passed      │  ──→ 是否通过阈值
+              └─────────────────┘
+                         │
+                         ▼
+               Rich 表格 或 JSON 输出
 ```
 
 ### `pg ci init`
@@ -670,7 +701,7 @@ project-root/
 **.prompts/config.json:**
 ```json
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "created_at": "2026-05-04T10:30:00",
   "eval_threshold": 0.05,
   "model_provider": "openai",
@@ -700,6 +731,7 @@ cli.py
   ├── utils.py         (get_repo, render_table, error_exit)
   ├── diff_engine.py   (diff_prompts, DiffResult)
   ├── evaluator.py     (load_dataset, evaluate_prompts)
+  ├── llm_evaluator.py (get_llm_config, evaluate_prompts_with_llm, compare_models)
   └── ci_gen.py        (init_ci)
 
 diff_engine.py
@@ -708,13 +740,12 @@ diff_engine.py
 evaluator.py
   └── schema.py        (PromptTemplate)
 
+llm_evaluator.py
+  ├── evaluator.py     (EvalSample, EvalResult, compute_similarity, rule_based_render)
+  └── schema.py        (PromptTemplate)
+
 ci_gen.py
   └── (无内部依赖)
-
-ci_guard.py
-  ├── schema.py
-  ├── diff_engine.py
-  └── evaluator.py
 ```
 
 ### 外部依赖
@@ -726,6 +757,7 @@ ci_guard.py
 | `gitpython` | Git 操作 | utils.py, cli.py |
 | `rich` | 终端渲染 | utils.py, cli.py |
 | `pyyaml` | YAML 解析 | schema.py, ci_gen.py |
+| `litellm` | LLM 多提供商调用 | llm_evaluator.py（可选依赖） |
 
 ---
 
@@ -842,43 +874,49 @@ def analyze_semantic_changes(old, new, ...):
 
 ```
 tests/
-├── conftest.py           # 21 个 fixtures
-│   ├── Git 仓库 fixtures (6 个)
-│   ├── Prompt 文件 fixtures (4 个)
-│   ├── 初始化仓库 fixtures (5 个)
-│   ├── 数据集 fixtures (3 个)
-│   └── 辅助 fixtures (3 个)
+├── conftest.py           # Fixtures: Git 仓库、Prompt 文件、数据集等
 │
 ├── test_cli.py           # 14 个测试
-│   ├── init (4): 正常/干跑/非Git/幂等
-│   ├── add (5): 正常/干跑/缺失/无效/格式
-│   └── commit (5): 正常/干跑/无目录/无变更/校验警告
+│   ├── init: 正常/干跑/非Git/幂等
+│   ├── add: 正常/干跑/缺失/无效/格式
+│   └── commit: 正常/干跑/无目录/无变更/校验警告
 │
 ├── test_diff.py          # 29 个测试
-│   ├── extract_variables (5): 单变量/多变量/无变量/重复/中文
-│   ├── tone_shift (5): 无偏移/正式→随意/中文/相同/空
-│   ├── role_shift (5): 无偏移/英文/中文/无角色/空
-│   ├── structured_diff (5): 相同/新增/删除/修改/嵌套
-│   ├── diff_prompts (5): 相同/变量变更/约束删除/角色偏移/JSON输出
-│   └── edge_cases (4): 空约束/混合变更/多语言/仅版本
+│   ├── extract_variables: 单变量/多变量/无变量/重复/中文
+│   ├── tone_shift: 无偏移/正式→随意/中文/相同/空
+│   ├── role_shift: 无偏移/英文/中文/无角色/空
+│   ├── structured_diff: 相同/新增/删除/修改/嵌套
+│   ├── diff_prompts: 相同/变量变更/约束删除/角色偏移/JSON输出
+│   └── edge_cases: 空约束/混合变更/多语言/仅版本
 │
 ├── test_eval.py          # 33 个测试
-│   ├── load_dataset (5): 正常/空/缺失/无效/元数据
-│   ├── token_estimation (4): 英文/中文/空/混合
-│   ├── similarity (5): 相同/完全不同/空/单空/部分
-│   ├── keyword_extraction (3): 英文/中文/空
-│   ├── keyword_evaluation (3): 匹配/不匹配/空期望
-│   ├── rule_based_render (3): 基本/默认/覆盖
-│   ├── evaluate_prompts (5): 相同/阈值失败/空数据集/token/JSON
-│   └── edge_cases (5): 空约束/多语言/变量冲突/长文本/一致性
+│   ├── load_dataset: 正常/空/缺失/无效/元数据
+│   ├── token_estimation: 英文/中文/空/混合
+│   ├── similarity: 相同/完全不同/空/单空/部分
+│   ├── keyword_extraction: 英文/中文/空
+│   ├── keyword_evaluation: 匹配/不匹配/空期望
+│   ├── rule_based_render: 基本/默认/覆盖
+│   ├── evaluate_prompts: 相同/阈值失败/空数据集/token/JSON
+│   └── edge_cases: 空约束/多语言/变量冲突/长文本/一致性
+│
+├── test_llm_eval.py      # 32 个测试
+│   ├── LLMConfig: 默认值/自定义/提供商前缀/Azure
+│   ├── get_llm_config: 基本/API Key/API Base/环境变量/Azure
+│   ├── call_llm: 成功/system_prompt/ImportError
+│   ├── llm_judge_evaluate: 成功/无效JSON/部分JSON
+│   ├── llm_generate_output: 成功/错误
+│   ├── evaluate_prompts_with_llm: 基本/judge/空数据集
+│   └── compare_models: 基本/无效JSON/多样本
 │
 └── test_ci_gen.py        # 42 个测试
-    ├── workflow_generation (15): YAML/名称/分支/路径/权限/并发/步骤
-    ├── pre_commit (7): YAML/仓库/钩子/级别/文件模式
-    ├── publish_workflow (5): YAML/触发/权限/步骤/密钥
-    ├── version_bump (3): 内容/sed/git
-    ├── init_ci (7): 干跑/文件/目录/内容/自定义
-    └── edge_cases (5): 空分支/特殊字符/禁用功能/Unicode
+    ├── workflow_generation: YAML/名称/分支/路径/权限/并发/步骤
+    ├── pre_commit: YAML/仓库/钩子/级别/文件模式
+    ├── publish_workflow: YAML/触发/权限/步骤/密钥
+    ├── version_bump: 内容/sed/git
+    ├── init_ci: 干跑/文件/目录/内容/自定义
+    └── edge_cases: 空分支/特殊字符/禁用功能/Unicode
+
+总计: 150 个测试
 ```
 
 ---

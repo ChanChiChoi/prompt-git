@@ -205,6 +205,7 @@ pg diff [OPTIONS] [FILE]
 |--------|-------|-------------|
 | `--semantic` | `-s` | Show semantic diff with risk analysis |
 | `--json` | `-j` | Output diff as JSON |
+| `--fail-on` | | Exit with error if risk level >= this value (`low`/`med`/`high`) |
 | `--help` | | Show help message |
 
 **Examples:**
@@ -221,6 +222,12 @@ pg diff .prompts/qa_prompt.yaml
 
 # JSON output for CI integration
 pg diff --json > diff_result.json
+
+# Fail on high-risk changes (for CI/pre-commit)
+pg diff --fail-on=high
+
+# Fail on medium or high-risk changes
+pg diff --fail-on=med
 ```
 
 **Semantic Analysis:**
@@ -271,13 +278,15 @@ pg eval [OPTIONS]
 | `--dataset` | `-d` | Yes | Path to dataset JSONL file |
 | `--old` | | No | Old prompt file (default: HEAD version) |
 | `--new` | | No | New prompt file (default: current version) |
-| `--threshold` | `-t` | No | Accuracy drop threshold (default: 0.05) |
+| `--threshold` | `-t` | No | Accuracy drop threshold (default: env `PROMPT_GIT_THRESHOLD` or `0.05`) |
 | `--json` | `-j` | No | Output as JSON |
-| `--provider` | `-p` | No | LLM provider (openai, anthropic, ollama, etc.) |
+| `--provider` | `-p` | No | LLM provider (openai, anthropic, azure, ollama, vllm, sglang) |
 | `--model` | `-m` | No | LLM model name (e.g., gpt-4, claude-3-opus-20240229) |
 | `--api-base` | | No | Custom API base URL (for proxies or local models) |
 | `--judge` | | No | Enable LLM-as-judge evaluation mode |
-| `--compare-models` | `-c` | No | Compare multiple models (comma-separated) |
+| `--judge-provider` | | No | Judge LLM provider (if different from main provider) |
+| `--judge-model` | | No | Judge LLM model (e.g., gpt-4 for judging gpt-3.5 outputs) |
+| `--compare-models` | `-c` | No | Compare models. Format: 'model1,model2' or 'provider1:model1,provider2:model2' |
 | `--help` | | No | Show help message |
 
 **Examples:**
@@ -292,6 +301,12 @@ pg eval --dataset data.jsonl --provider openai --model gpt-4
 # LLM-as-judge evaluation (more accurate)
 pg eval --dataset data.jsonl --provider openai --model gpt-4 --judge
 
+# LLM-as-judge with separate judge model (recommended)
+pg eval --dataset data.jsonl --provider openai --model gpt-3.5-turbo --judge --judge-model gpt-4
+
+# Local model with cloud judge
+pg eval --dataset data.jsonl --provider ollama --model llama2 --judge --judge-provider openai --judge-model gpt-4
+
 # Custom API base (proxy, private deployment)
 pg eval --dataset data.jsonl --provider openai --model gpt-4 \
   --api-base "https://your-proxy.com/v1"
@@ -302,8 +317,14 @@ pg eval --dataset data.jsonl --provider anthropic --model claude-3-opus-20240229
 # Use Ollama local model
 pg eval --dataset data.jsonl --provider ollama --model llama2
 
-# Compare multiple models
+# Compare models from same provider
 pg eval --dataset data.jsonl --compare-models gpt-3.5-turbo,gpt-4
+
+# Compare models from different providers (use provider:model format)
+pg eval --dataset data.jsonl --compare-models openai:gpt-4,anthropic:claude-3-opus-20240229
+
+# Compare local and cloud models
+pg eval --dataset data.jsonl --compare-models ollama:llama2,openai:gpt-4
 
 # Custom threshold
 pg eval -d data.jsonl -t 0.10
@@ -436,7 +457,7 @@ The `.prompts/config.json` file stores project settings:
 
 ```json
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "created_at": "2026-05-04T10:30:00",
   "eval_threshold": 0.05,
   "model_provider": "openai",
