@@ -82,7 +82,9 @@
 | `PROMPT_GIT_MODEL` | LLM 模型 | `none` |
 | `PROMPT_GIT_THRESHOLD` | 评估阈值 | `0.05` |
 | `OPENAI_API_KEY` | OpenAI API Key | - |
+| `OPENAI_API_BASE` | OpenAI API Base URL | `https://api.openai.com/v1` |
 | `ANTHROPIC_API_KEY` | Anthropic API Key | - |
+| `OLLAMA_API_BASE` | Ollama API Base URL | `http://localhost:11434` |
 
 ### 设置方式
 
@@ -267,6 +269,156 @@ repos:
         language: system
         files: '\.prompts/.*\.ya?ml$'
         pass_filenames: false
+```
+
+---
+
+## LLM 配置
+
+### 概述
+
+prompt-git-manager 支持使用 LLM 进行增强评估，通过 LiteLLM 实现多提供商支持。
+
+### 配置方式
+
+#### 1. CLI 参数（优先级最高）
+
+```bash
+# 指定提供商和模型
+pg eval --dataset data.jsonl --provider openai --model gpt-4
+
+# 指定自定义 API Base
+pg eval --dataset data.jsonl --provider openai --model gpt-4 \
+  --api-base "https://your-proxy.com/v1"
+```
+
+#### 2. 环境变量
+
+```bash
+# OpenAI
+export OPENAI_API_KEY="sk-your-key-here"
+export OPENAI_API_BASE="https://api.openai.com/v1"  # 可选
+
+# Anthropic
+export ANTHROPIC_API_KEY="sk-ant-your-key-here"
+
+# Ollama（本地模型）
+export OLLAMA_API_BASE="http://localhost:11434"
+```
+
+#### 3. Python API
+
+```python
+from promptgit.llm_evaluator import get_llm_config, evaluate_prompts_with_llm
+
+# 方式 1：自动从环境变量读取 API Key
+config = get_llm_config(
+    provider="openai",
+    model="gpt-4"
+)
+
+# 方式 2：显式指定所有参数
+config = get_llm_config(
+    provider="openai",
+    model="gpt-4",
+    api_key="sk-your-key-here",
+    api_base="https://api.openai.com/v1"
+)
+
+# 方式 3：使用 Ollama 本地模型
+config = get_llm_config(
+    provider="ollama",
+    model="llama2",
+    api_base="http://localhost:11434"
+)
+
+# 运行评估
+result = evaluate_prompts_with_llm(
+    old_template=old_template,
+    new_template=new_template,
+    dataset=dataset,
+    config=config,
+    use_judge=True  # 启用 LLM-as-judge
+)
+```
+
+### 支持的提供商
+
+| 提供商 | provider 参数 | 环境变量 | 示例模型 |
+|--------|--------------|----------|----------|
+| OpenAI | `openai` | `OPENAI_API_KEY` | `gpt-4`, `gpt-3.5-turbo` |
+| Anthropic | `anthropic` | `ANTHROPIC_API_KEY` | `claude-3-opus-20240229` |
+| Ollama | `ollama` | 无需 | `llama2`, `mistral` |
+| Azure OpenAI | `azure` | `AZURE_API_KEY` | `gpt-4` |
+
+### 自定义 API Base
+
+对于私有部署、代理或本地模型，需要指定自定义 API Base：
+
+```bash
+# 使用代理
+pg eval --dataset data.jsonl --provider openai --model gpt-4 \
+  --api-base "https://your-proxy.com/v1"
+
+# 使用 Ollama 本地模型
+pg eval --dataset data.jsonl --provider ollama --model llama2 \
+  --api-base "http://localhost:11434"
+
+# 使用 Azure OpenAI
+pg eval --dataset data.jsonl --provider azure --model gpt-4 \
+  --api-base "https://your-resource.openai.azure.com"
+```
+
+### LLM-as-Judge 模式
+
+使用 LLM 作为评判者，更准确地评估输出质量：
+
+```bash
+# 启用 LLM-as-judge
+pg eval --dataset data.jsonl --provider openai --model gpt-4 --judge
+```
+
+**评分标准：**
+- 1.0：完美匹配
+- 0.8-0.9：高度匹配
+- 0.6-0.7：部分匹配
+- 0.4-0.5：勉强相关
+- 0.0-0.3：不相关
+
+### 多模型对比
+
+比较不同模型的表现：
+
+```bash
+# 对比 GPT-3.5 和 GPT-4
+pg eval --dataset data.jsonl --compare-models gpt-3.5-turbo,gpt-4
+```
+
+### 成本控制
+
+| 模型 | 每 1000 样本估算成本 |
+|------|---------------------|
+| gpt-3.5-turbo | ~$0.50 |
+| gpt-4 | ~$10-30 |
+| claude-3-sonnet | ~$3 |
+| claude-3-opus | ~$15-45 |
+| Ollama (本地) | $0 |
+
+### 故障排除
+
+**问题：API Key 未找到**
+```
+解决方案：设置环境变量或在 CLI 中显式指定
+```
+
+**问题：连接超时**
+```
+解决方案：检查 API Base URL 是否正确，或使用代理
+```
+
+**问题：模型不存在**
+```
+解决方案：检查模型名称是否正确，参考提供商文档
 ```
 
 ---

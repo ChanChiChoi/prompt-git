@@ -273,13 +273,37 @@ pg eval [OPTIONS]
 | `--new` | | No | New prompt file (default: current version) |
 | `--threshold` | `-t` | No | Accuracy drop threshold (default: 0.05) |
 | `--json` | `-j` | No | Output as JSON |
+| `--provider` | `-p` | No | LLM provider (openai, anthropic, ollama, etc.) |
+| `--model` | `-m` | No | LLM model name (e.g., gpt-4, claude-3-opus-20240229) |
+| `--api-base` | | No | Custom API base URL (for proxies or local models) |
+| `--judge` | | No | Enable LLM-as-judge evaluation mode |
+| `--compare-models` | `-c` | No | Compare multiple models (comma-separated) |
 | `--help` | | No | Show help message |
 
 **Examples:**
 
 ```bash
-# Evaluate against dataset
+# Rule-based evaluation (offline, no API needed)
 pg eval --dataset fixtures/dataset.jsonl
+
+# LLM-enhanced evaluation
+pg eval --dataset data.jsonl --provider openai --model gpt-4
+
+# LLM-as-judge evaluation (more accurate)
+pg eval --dataset data.jsonl --provider openai --model gpt-4 --judge
+
+# Custom API base (proxy, private deployment)
+pg eval --dataset data.jsonl --provider openai --model gpt-4 \
+  --api-base "https://your-proxy.com/v1"
+
+# Use Anthropic
+pg eval --dataset data.jsonl --provider anthropic --model claude-3-opus-20240229
+
+# Use Ollama local model
+pg eval --dataset data.jsonl --provider ollama --model llama2
+
+# Compare multiple models
+pg eval --dataset data.jsonl --compare-models gpt-3.5-turbo,gpt-4
 
 # Custom threshold
 pg eval -d data.jsonl -t 0.10
@@ -317,7 +341,7 @@ pg eval -d data.jsonl --json > eval_result.json
 | 0 | PASSED | Accuracy within threshold |
 | 2 | FAILED | Accuracy dropped below threshold |
 
-**Output:**
+**Output (Rule-based):**
 
 ```
 ┌────────────────────┬────────────────┐
@@ -334,6 +358,47 @@ pg eval -d data.jsonl --json > eval_result.json
 │ Status             │ ✅ PASSED      │
 │ Threshold          │ 5.0%           │
 └────────────────────┴────────────────┘
+```
+
+**Output (LLM-enhanced):**
+
+```
+┌────────────────────┬────────────────┐
+│ Metric             │ Value          │
+├────────────────────┼────────────────┤
+│ Total Samples      │ 20             │
+│ Accuracy (Old)     │ 90.0%          │
+│ Accuracy (New)     │ 85.0%          │
+│ Accuracy Delta     │ -5.0%          │
+│ Token Cost (Old)   │ 1500           │
+│ Token Cost (New)   │ 1450           │
+│ Token Cost Delta   │ -3.3%          │
+│ Consistency Score  │ 80.0%          │
+│ Status             │ ✅ PASSED      │
+│ Threshold          │ 5.0%           │
+│ Provider           │ openai         │
+│ Model              │ gpt-4          │
+│ Judge Mode         │ LLM-as-judge   │
+└────────────────────┴────────────────┘
+```
+
+**Output (Model Comparison):**
+
+```
+┌──────────┬─────────────────┬─────────────────┬──────────┐
+│ Sample   │ Score (gpt-3.5) │ Score (gpt-4)   │ Winner   │
+├──────────┼─────────────────┼─────────────────┼──────────┤
+│ Sample 1 │ 0.75            │ 0.92            │ gpt-4    │
+│ Sample 2 │ 0.80            │ 0.85            │ gpt-4    │
+│ Sample 3 │ 0.90            │ 0.88            │ gpt-3.5  │
+└──────────┴─────────────────┴─────────────────┴──────────┘
+
+Summary:
+  gpt-3.5-turbo wins: 1
+  gpt-4 wins: 2
+  Ties: 0
+
+Overall winner: gpt-4
 ```
 
 ---
@@ -356,6 +421,10 @@ pg eval -d data.jsonl --json > eval_result.json
 | `PROMPT_GIT_MODEL` | LLM model for evaluation | `none` |
 | `PROMPT_GIT_THRESHOLD` | Default eval threshold | `0.05` |
 | `PROMPT_GIT_EDITOR` | Editor for commit messages | `$EDITOR` |
+| `OPENAI_API_KEY` | OpenAI API key | - |
+| `OPENAI_API_BASE` | OpenAI API base URL | `https://api.openai.com/v1` |
+| `ANTHROPIC_API_KEY` | Anthropic API key | - |
+| `OLLAMA_API_BASE` | Ollama API base URL | `http://localhost:11434` |
 
 ---
 

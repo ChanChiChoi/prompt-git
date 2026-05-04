@@ -374,23 +374,159 @@ def estimate_tokens(text):
 
 ### LLM 增强评估（可选）
 
-使用 LLM 作为评判标准：
+使用 LLM 作为评判标准，提供更准确的评估结果。
+
+#### 配置方式
+
+**1. 环境变量配置（推荐）**
+
+```bash
+# OpenAI
+export OPENAI_API_KEY="sk-your-key-here"
+export OPENAI_API_BASE="https://api.openai.com/v1"  # 可选，默认值
+
+# Anthropic
+export ANTHROPIC_API_KEY="sk-ant-your-key-here"
+
+# Ollama（本地模型）
+export OLLAMA_API_BASE="http://localhost:11434"
+```
+
+**2. CLI 参数配置**
+
+```bash
+# 指定提供商和模型
+pg eval --dataset data.jsonl --provider openai --model gpt-4
+
+# 指定自定义 API Base（用于私有部署或代理）
+pg eval --dataset data.jsonl --provider openai --model gpt-4 \
+  --api-base "https://your-proxy.com/v1"
+
+# 使用 Anthropic
+pg eval --dataset data.jsonl --provider anthropic --model claude-3-opus-20240229
+
+# 使用 Ollama 本地模型
+pg eval --dataset data.jsonl --provider ollama --model llama2
+```
+
+**3. Python API 配置**
 
 ```python
-def llm_based_evaluate(rendered_prompt, expected_output):
-    # 调用 LLM API
-    response = openai.chat.completions.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": "Evaluate if the response matches the expected output."},
-            {"role": "user", "content": f"Prompt: {rendered_prompt}\nExpected: {expected_output}"}
-        ]
-    )
-    
-    # 解析评分
-    score = parse_score(response.choices[0].message.content)
-    return score >= 0.8  # 80% 以上视为匹配
+from promptgit.llm_evaluator import get_llm_config, evaluate_prompts_with_llm
+
+# 方式 1：自动从环境变量读取 API Key
+config = get_llm_config(
+    provider="openai",
+    model="gpt-4"
+)
+
+# 方式 2：显式指定 API Key
+config = get_llm_config(
+    provider="openai",
+    model="gpt-4",
+    api_key="sk-your-key-here"
+)
+
+# 方式 3：自定义 API Base（私有部署、代理、本地模型）
+config = get_llm_config(
+    provider="openai",
+    model="gpt-4",
+    api_key="sk-your-key-here",
+    api_base="https://your-proxy.com/v1"
+)
+
+# 方式 4：使用 Ollama 本地模型
+config = get_llm_config(
+    provider="ollama",
+    model="llama2",
+    api_base="http://localhost:11434"
+)
 ```
+
+#### 支持的提供商
+
+| 提供商 | provider 参数 | 模型示例 | API Key 环境变量 |
+|--------|--------------|----------|-----------------|
+| OpenAI | `openai` | `gpt-4`, `gpt-3.5-turbo`, `gpt-4-turbo` | `OPENAI_API_KEY` |
+| Anthropic | `anthropic` | `claude-3-opus-20240229`, `claude-3-sonnet-20240229` | `ANTHROPIC_API_KEY` |
+| Ollama | `ollama` | `llama2`, `mistral`, `codellama` | 无需（本地） |
+| Azure OpenAI | `azure` | `gpt-4`, `gpt-35-turbo` | `AZURE_API_KEY` |
+| 其他 | LiteLLM 支持的任意提供商 | - | 视提供商而定 |
+
+#### LLM-as-Judge 模式
+
+使用 LLM 作为评判者，更准确地评估输出质量：
+
+```bash
+# 启用 LLM-as-judge
+pg eval --dataset data.jsonl --provider openai --model gpt-4 --judge
+
+# JSON 输出（用于 CI）
+pg eval --dataset data.jsonl --provider openai --model gpt-4 --judge --json
+```
+
+**Judge 评分标准：**
+- 1.0：完美匹配期望输出
+- 0.8-0.9：高度匹配，细节略有不同
+- 0.6-0.7：部分匹配，缺少关键信息
+- 0.4-0.5：勉强相关，偏差较大
+- 0.0-0.3：不相关或完全错误
+
+#### 多模型对比
+
+比较不同模型在同一数据集上的表现：
+
+```bash
+# 对比 GPT-3.5 和 GPT-4
+pg eval --dataset data.jsonl --compare-models gpt-3.5-turbo,gpt-4
+
+# 对比 OpenAI 和 Anthropic
+pg eval --dataset data.jsonl --provider openai --compare-models gpt-4,claude-3-opus-20240229
+
+# JSON 输出
+pg eval --dataset data.jsonl --compare-models gpt-3.5-turbo,gpt-4 --json
+```
+
+**输出示例：**
+```
+┌──────────┬─────────────────┬─────────────────┬──────────┐
+│ Sample   │ Score (gpt-3.5) │ Score (gpt-4)   │ Winner   │
+├──────────┼─────────────────┼─────────────────┼──────────┤
+│ Sample 1 │ 0.75            │ 0.92            │ gpt-4    │
+│ Sample 2 │ 0.80            │ 0.85            │ gpt-4    │
+│ Sample 3 │ 0.90            │ 0.88            │ gpt-3.5  │
+└──────────┴─────────────────┴─────────────────┴──────────┘
+
+Summary:
+  gpt-3.5-turbo wins: 1
+  gpt-4 wins: 2
+  Ties: 0
+
+Overall winner: gpt-4
+```
+
+#### 使用场景
+
+| 场景 | 推荐配置 |
+|------|---------|
+| 快速验证 | 规则引擎（默认，无需 API） |
+| 准确评估 | `--provider openai --model gpt-4` |
+| 最高准确性 | `--provider openai --model gpt-4 --judge` |
+| 成本敏感 | `--provider openai --model gpt-3.5-turbo` |
+| 隐私敏感 | `--provider ollama --model llama2` |
+| 模型选型 | `--compare-models model1,model2` |
+
+#### 成本估算
+
+| 模型 | 每 1000 样本估算成本 | 说明 |
+|------|---------------------|------|
+| gpt-3.5-turbo | ~$0.50 | 经济实惠 |
+| gpt-4 | ~$10-30 | 高准确性 |
+| claude-3-sonnet | ~$3 | Anthropic 中端 |
+| claude-3-opus | ~$15-45 | Anthropic 高端 |
+| Ollama (本地) | $0 | 需要本地 GPU |
+
+**注意：** 实际成本取决于 prompt 长度和输出长度。上述为粗略估算。
 
 ---
 
