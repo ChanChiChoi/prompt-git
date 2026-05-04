@@ -738,6 +738,64 @@ config = get_llm_config(
 )
 ```
 
+#### evaluate_prompts_with_llm 使用示例
+
+```python
+from pathlib import Path
+from promptgit.schema import PromptTemplate
+from promptgit.evaluator import load_dataset
+from promptgit.llm_evaluator import get_llm_config, evaluate_prompts_with_llm
+
+# 1. 加载模板和数据集
+old_template = PromptTemplate.from_yaml(Path("prompts/v1.yaml"))
+new_template = PromptTemplate.from_yaml(Path("prompts/v2.yaml"))
+dataset = load_dataset(Path("fixtures/dataset.jsonl"))
+
+# 2. 创建 LLM 配置
+config = get_llm_config("openai", "gpt-3.5-turbo")
+
+# 方式 A：LLM 增强模式（使用文本相似度匹配）
+result = evaluate_prompts_with_llm(
+    old_template=old_template,
+    new_template=new_template,
+    dataset=dataset,
+    llm_config=config,
+    threshold=0.05,
+    use_judge=False  # 默认值，使用相似度匹配
+)
+
+print(f"准确率变化: {result.accuracy_delta:+.1%}")
+print(f"是否通过: {result.passed}")
+
+# 方式 B：LLM-as-Judge 模式（使用同一个模型生成和评判）
+result = evaluate_prompts_with_llm(
+    old_template=old_template,
+    new_template=new_template,
+    dataset=dataset,
+    llm_config=config,
+    threshold=0.05,
+    use_judge=True  # 启用 Judge 模式
+)
+
+# 方式 C：独立 Judge 模型（推荐：小模型生成，大模型评判）
+gen_config = get_llm_config("openai", "gpt-3.5-turbo")
+judge_config = get_llm_config("openai", "gpt-4")
+
+result = evaluate_prompts_with_llm(
+    old_template=old_template,
+    new_template=new_template,
+    dataset=dataset,
+    llm_config=gen_config,
+    threshold=0.05,
+    use_judge=True,
+    judge_config=judge_config  # 独立的 Judge 模型
+)
+
+# 访问 Judge 评分详情
+for judge in result.judge_results:
+    print(f"分数: {judge.score:.2f}, 理由: {judge.reasoning}")
+```
+
 #### 支持的提供商
 
 | 提供商 | provider 参数 | 模型示例 | 默认 API Base | API Key 环境变量 |
