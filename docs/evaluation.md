@@ -672,8 +672,20 @@ export OPENAI_API_BASE="https://api.openai.com/v1"  # 可选，默认值
 # Anthropic
 export ANTHROPIC_API_KEY="sk-ant-your-key-here"
 
-# Ollama（本地模型）
-export OLLAMA_API_BASE="http://localhost:11434"
+# Azure OpenAI
+export AZURE_API_KEY="your-azure-key"
+
+# Ollama（本地/局域网部署）
+export OLLAMA_API_KEY="your-key"                      # 可选，局域网认证时使用
+export OLLAMA_API_BASE="http://localhost:11434"        # 默认值，局域网改为实际地址
+
+# vLLM（本地/局域网部署）
+export VLLM_API_KEY="your-key"                         # 可选，局域网认证时使用
+export VLLM_API_BASE="http://localhost:8000/v1"        # 默认值，局域网改为实际地址
+
+# SGLang（本地/局域网部署）
+export SGLANG_API_KEY="your-key"                       # 可选，局域网认证时使用
+export SGLANG_API_BASE="http://localhost:30000/v1"     # 默认值，局域网改为实际地址
 ```
 
 **2. CLI 参数配置**
@@ -802,10 +814,10 @@ for judge in result.judge_results:
 |--------|--------------|----------|---------------|-----------------|
 | OpenAI | `openai` | `gpt-4`, `gpt-3.5-turbo`, `gpt-4-turbo` | `https://api.openai.com/v1` | `OPENAI_API_KEY` |
 | Anthropic | `anthropic` | `claude-3-opus-20240229`, `claude-3-sonnet-20240229` | - | `ANTHROPIC_API_KEY` |
-| Ollama | `ollama` | `llama2`, `mistral`, `codellama`, `qwen2` | `http://localhost:11434` | 无需 |
-| vLLM | `vllm` | `meta-llama/Llama-2-7b-chat-hf`, `Qwen/Qwen2-7B-Instruct` | `http://localhost:8000/v1` | 无需 |
-| SGLang | `sglang` | `meta-llama/Llama-2-7b-chat-hf`, `Qwen/Qwen2-7B-Instruct` | `http://localhost:30000/v1` | 无需 |
 | Azure OpenAI | `azure` | `gpt-4`, `gpt-35-turbo` | - | `AZURE_API_KEY` |
+| Ollama | `ollama` | `llama2`, `mistral`, `codellama`, `qwen2` | `http://localhost:11434` | `OLLAMA_API_KEY`（可选，局域网认证） |
+| vLLM | `vllm` | `meta-llama/Llama-2-7b-chat-hf`, `Qwen/Qwen2-7B-Instruct` | `http://localhost:8000/v1` | `VLLM_API_KEY`（可选，局域网认证） |
+| SGLang | `sglang` | `meta-llama/Llama-2-7b-chat-hf`, `Qwen/Qwen2-7B-Instruct` | `http://localhost:30000/v1` | `SGLANG_API_KEY`（可选，局域网认证） |
 | 其他 | LiteLLM 支持的任意提供商 | - | - | 视提供商而定 |
 
 #### LLM-as-Judge 模式
