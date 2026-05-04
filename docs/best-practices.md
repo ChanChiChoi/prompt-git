@@ -217,10 +217,10 @@ main ─────────────────────────
 metadata:
   changelog:
     - version: "1.2.0"
-      date: "2024-01-15"
+      date: "2026-05-04"
       changes: "Add multilingual support"
     - version: "1.1.0"
-      date: "2024-01-10"
+      date: "2026-04-28"
       changes: "Improve error handling"
 ```
 

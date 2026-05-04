@@ -13,6 +13,7 @@
 | [快速开始](quickstart.md) | 5 分钟上手指南 | 新用户 |
 | [CLI 参考](cli_reference.md) | 所有命令详解 | 日常使用 |
 | [Prompt Schema](prompt-schema.md) | Prompt 文件格式规范 | 编写 Prompt |
+| [评估指南](evaluation.md) | 评估功能完整参考 | 质量保证 |
 | [配置详解](configuration.md) | 配置文件完整参考 | 配置调整 |
 
 ### 开发文档
@@ -73,6 +74,14 @@
 - [样本结构](dataset-guide.md#样本结构) - 字段定义
 - [边界样本](dataset-guide.md#边界样本) - 测试边界情况
 - [对抗样本](dataset-guide.md#对抗样本) - 测试安全性
+
+### 我想了解评估
+
+- [评估概述](evaluation.md#概述) - 什么是评估
+- [基本用法](evaluation.md#基本用法) - 快速开始
+- [评估指标](evaluation.md#评估指标) - 指标详解
+- [阈值配置](evaluation.md#阈值配置) - 如何设置阈值
+- [自定义评估](evaluation.md#自定义评估) - 扩展评估逻辑
 
 ### 我想集成到 CI/CD
 

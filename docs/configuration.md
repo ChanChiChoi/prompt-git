@@ -23,7 +23,7 @@
 ```json
 {
   "version": "0.1.0",
-  "created_at": "2024-01-15T10:30:00",
+  "created_at": "2026-05-04T10:30:00",
   "eval_threshold": 0.05,
   "model_provider": "openai",
   "default_model": "gpt-3.5-turbo",

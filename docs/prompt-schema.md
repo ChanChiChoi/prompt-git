@@ -260,8 +260,8 @@ metadata:
   max_tokens: 500
   
   # 时间戳
-  created_at: "2024-01-15T10:30:00Z"
-  updated_at: "2024-01-20T15:45:00Z"
+  created_at: "2026-05-04T10:30:00Z"
+  updated_at: "2026-05-04T15:45:00Z"
   
   # 审批
   reviewers: ["alice", "bob"]
@@ -347,8 +347,8 @@ metadata:
   model: gpt-4
   temperature: 0.7
   max_tokens: 500
-  created_at: "2024-01-01T00:00:00Z"
-  updated_at: "2024-01-15T10:30:00Z"
+  created_at: "2026-04-01T00:00:00Z"
+  updated_at: "2026-05-04T10:30:00Z"
 ```
 
 ### 代码生成场景

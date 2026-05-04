@@ -56,14 +56,22 @@ Prompt engineering is becoming critical to AI applications, but managing prompts
 
 ## Documentation
 
-📖 **[完整文档目录](./docs/index.md)**
+📖 **[Full Documentation](./docs/index.md)**
 
-| 文档 | 说明 |
-|------|------|
-| [快速开始](./docs/quickstart.md) | 5 分钟上手指南 |
-| [CLI 参考](./docs/cli_reference.md) | 所有命令详解 |
-| [架构文档](./docs/architecture.md) | 内部实现原理 |
-| [故障排除](./docs/TROUBLESHOOTING.md) | 常见问题解决 |
+| Document | Description |
+|----------|-------------|
+| [Quick Start](./docs/quickstart.md) | Get started in 5 minutes |
+| [CLI Reference](./docs/cli_reference.md) | All commands detailed |
+| [Prompt Schema](./docs/prompt-schema.md) | Prompt file format spec |
+| [Evaluation Guide](./docs/evaluation.md) | Evaluation complete reference |
+| [Dataset Guide](./docs/dataset-guide.md) | Create evaluation datasets |
+| [Configuration](./docs/configuration.md) | Configuration reference |
+| [Python API](./docs/python-api.md) | Programmatic usage |
+| [Architecture](./docs/architecture.md) | Internal implementation |
+| [Best Practices](./docs/best-practices.md) | Prompt management tips |
+| [Migration Guide](./docs/migration.md) | Migrate from other tools |
+| [Troubleshooting](./docs/TROUBLESHOOTING.md) | Common issues & solutions |
+| [Roadmap](./docs/roadmap.md) | Future plans |
 
 ---
 
@@ -206,7 +214,7 @@ pg commit -m "message" [--dry-run]
 ```json
 {
   "hash": "abc123",
-  "timestamp": "2024-01-15T10:30:00",
+  "timestamp": "2026-05-04T10:30:00",
   "changed_files": [".prompts/qa_prompt.yaml"],
   "validation_status": "pass",
   "message": "Update QA prompt"

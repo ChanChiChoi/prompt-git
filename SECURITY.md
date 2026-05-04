@@ -225,4 +225,4 @@ pip install --upgrade prompt-git-manager
 
 ---
 
-最后更新：2024-01-15
+最后更新：2026-05-04

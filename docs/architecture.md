@@ -671,7 +671,7 @@ project-root/
 ```json
 {
   "version": "0.1.0",
-  "created_at": "2024-01-15T10:30:00",
+  "created_at": "2026-05-04T10:30:00",
   "eval_threshold": 0.05,
   "model_provider": "openai",
   "default_model": "gpt-3.5-turbo"
@@ -680,7 +680,7 @@ project-root/
 
 **commits.jsonl（每行一个记录）:**
 ```json
-{"hash":"abc123def456","timestamp":"2024-01-15T10:30:00","changed_files":[".prompts/qa.yaml"],"validation_status":"pass","message":"Initial commit"}
+{"hash":"abc123def456","timestamp":"2026-05-04T10:30:00","changed_files":[".prompts/qa.yaml"],"validation_status":"pass","message":"Initial commit"}
 ```
 
 **dataset.jsonl（每行一个样本）:**

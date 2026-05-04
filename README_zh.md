@@ -62,8 +62,16 @@ Prompt 工程对 AI 应用至关重要，但管理 Prompt 的方式却混乱不�
 |------|------|
 | [快速开始](./docs/quickstart.md) | 5 分钟上手指南 |
 | [CLI 参考](./docs/cli_reference.md) | 所有命令详解 |
+| [Prompt Schema](./docs/prompt-schema.md) | Prompt 文件格式规范 |
+| [评估指南](./docs/evaluation.md) | 评估功能完整参考 |
+| [数据集指南](./docs/dataset-guide.md) | 创建评估数据集 |
+| [配置详解](./docs/configuration.md) | 配置文件完整参考 |
+| [Python API](./docs/python-api.md) | 程序化调用 |
 | [架构文档](./docs/architecture.md) | 内部实现原理 |
+| [最佳实践](./docs/best-practices.md) | Prompt 管理建议 |
+| [迁移指南](./docs/migration.md) | 从其他工具迁移 |
 | [故障排除](./docs/TROUBLESHOOTING.md) | 常见问题解决 |
+| [路线图](./docs/roadmap.md) | 发展规划 |
 
 ---
 
@@ -206,7 +214,7 @@ pg commit -m "message" [--dry-run]
 ```json
 {
   "hash": "abc123",
-  "timestamp": "2024-01-15T10:30:00",
+  "timestamp": "2026-05-04T10:30:00",
   "changed_files": [".prompts/qa_prompt.yaml"],
   "validation_status": "pass",
   "message": "更新 QA prompt"

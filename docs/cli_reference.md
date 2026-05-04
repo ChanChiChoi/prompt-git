@@ -161,7 +161,7 @@ Each commit generates a structured record in `.prompts/commits.jsonl`:
 ```json
 {
   "hash": "abc123def456",
-  "timestamp": "2024-01-15T10:30:00",
+  "timestamp": "2026-05-04T10:30:00",
   "changed_files": [".prompts/qa_prompt.yaml"],
   "validation_status": "pass",
   "message": "Update QA prompt v2"
@@ -176,7 +176,7 @@ Each commit generates a structured record in `.prompts/commits.jsonl`:
 │ Field        │ Value                   │
 ├──────────────┼─────────────────────────┤
 │ Hash         │ abc123def456            │
-│ Timestamp    │ 2024-01-15T10:30:00     │
+│ Timestamp    │ 2026-05-04T10:30:00     │
 │ Files        │ 1                       │
 │ Validation   │ pass                    │
 │ Message      │ Update QA prompt v2     │
@@ -366,7 +366,7 @@ The `.prompts/config.json` file stores project settings:
 ```json
 {
   "version": "0.1.0",
-  "created_at": "2024-01-15T10:30:00",
+  "created_at": "2026-05-04T10:30:00",
   "eval_threshold": 0.05,
   "model_provider": "openai",
   "default_model": "gpt-3.5-turbo",

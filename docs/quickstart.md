@@ -154,6 +154,8 @@ EOF
 pg eval --dataset fixtures/dataset.jsonl --threshold 0.05
 ```
 
+> 📖 完整评估指南请参考 [评估文档](evaluation.md)
+
 输出示例：
 ```
 ┌────────────────────┬────────────────┐

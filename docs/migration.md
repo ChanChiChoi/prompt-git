@@ -66,7 +66,7 @@ variables:
    ```yaml
    metadata:
      source: langchain
-     migrated_at: "2024-01-15"
+     migrated_at: "2026-05-04"
    ```
 
 ### 格式差异
