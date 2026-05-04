@@ -245,14 +245,15 @@ def evaluate_prompts(
     new_template: PromptTemplate,
     dataset: list[EvalSample],
     threshold: float = 0.05,
-    render_fn: Callable = None,    # 可选自定义渲染函数
+    render_fn: Callable = None,    # 可选自定义渲染函数 (template, variables) -> str
+    evaluate_fn: Callable = None,  # 可选自定义评估函数 (prompt, expected) -> (output, bool)
 ) -> EvalResult
 ```
 
 **核心逻辑：**
 1. 遍历 dataset 中每个 sample
-2. 用 `rule_based_render` 渲染 old/new template
-3. 如果提供 `render_fn`，用它生成输出；否则用 `keyword_match` 判断匹配
+2. 渲染 old/new template：优先用 `render_fn`，否则用 `rule_based_render`
+3. 评估输出：优先用 `evaluate_fn`，否则用 `keyword_based_evaluate`
 4. 计算 accuracy_old、accuracy_new、accuracy_delta
 5. 计算 token_cost（estimate_tokens）
 6. 计算 consistency_score（old_match == new_match 的比例）

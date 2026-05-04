@@ -259,11 +259,11 @@ def custom_render(template, variables):
     """自定义渲染函数（例如接入 LLM）"""
     # 先用规则渲染
     rendered = rule_based_render(template, variables)
-    
+
     # 然后调用 LLM
     # response = call_llm(rendered)
     # return response
-    
+
     return rendered
 
 # 使用自定义渲染
@@ -273,6 +273,66 @@ result = evaluate_prompts(
     dataset=dataset,
     threshold=0.05,
     render_fn=custom_render  # 传入自定义函数
+)
+```
+
+### 自定义评估函数
+
+```python
+from promptgit.evaluator import evaluate_prompts, extract_keywords
+
+def custom_evaluate(rendered_prompt, expected_output):
+    """自定义评估函数，替换默认的 keyword_based_evaluate。
+
+    签名要求: (rendered_prompt: str, expected_output: str) -> (output: str, is_match: bool)
+    """
+    # 示例：使用更严格的关键词匹配（90% 命中率）
+    expected_kw = extract_keywords(expected_output)
+    prompt_kw = extract_keywords(rendered_prompt)
+    if not expected_kw:
+        return rendered_prompt, True
+    matched = expected_kw & prompt_kw
+    is_match = len(matched) / len(expected_kw) >= 0.9
+    return rendered_prompt, is_match
+
+result = evaluate_prompts(
+    old_template=old_template,
+    new_template=new_template,
+    dataset=dataset,
+    threshold=0.05,
+    evaluate_fn=custom_evaluate  # 传入自定义评估函数
+)
+```
+
+### 同时使用自定义渲染和评估
+
+```python
+from promptgit.llm_evaluator import get_llm_config, llm_generate_output
+
+config = get_llm_config("openai", "gpt-4")
+
+def llm_render(template, variables):
+    """用 LLM 生成输出"""
+    return llm_generate_output(config, template, variables)
+
+def strict_match(rendered_prompt, expected_output):
+    """严格匹配"""
+    from promptgit.evaluator import extract_keywords
+    expected_kw = extract_keywords(expected_output)
+    prompt_kw = extract_keywords(rendered_prompt)
+    if not expected_kw:
+        return rendered_prompt, True
+    matched = expected_kw & prompt_kw
+    is_match = len(matched) / len(expected_kw) >= 0.9
+    return rendered_prompt, is_match
+
+result = evaluate_prompts(
+    old_template=old_template,
+    new_template=new_template,
+    dataset=dataset,
+    threshold=0.05,
+    render_fn=llm_render,
+    evaluate_fn=strict_match,
 )
 ```
 

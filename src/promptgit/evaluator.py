@@ -415,6 +415,7 @@ def evaluate_prompts(
     dataset: list[EvalSample],
     threshold: float = 0.05,
     render_fn: Optional[RenderFunction] = None,
+    evaluate_fn: Optional[Callable[[str, str], tuple[str, bool]]] = None,
 ) -> EvalResult:
     """Evaluate two prompt versions against a dataset.
 
@@ -424,6 +425,11 @@ def evaluate_prompts(
         dataset: List of evaluation samples.
         threshold: Accuracy drop threshold for failure.
         render_fn: Optional custom render function (for LLM integration).
+            Signature: (template: PromptTemplate, variables: dict) -> str
+            If None, uses rule_based_render.
+        evaluate_fn: Optional custom evaluate function.
+            Signature: (rendered_prompt: str, expected_output: str) -> (output: str, is_match: bool)
+            If None, uses keyword_based_evaluate.
 
     Returns:
         EvalResult with metrics.
@@ -434,10 +440,8 @@ def evaluate_prompts(
     if not dataset:
         raise ValueError("Dataset is empty, cannot evaluate.")
 
-    if render_fn is None:
-        render_fn = lambda prompt, vars: rule_based_render(
-            old_template if "old" in prompt else new_template, vars
-        )
+    if evaluate_fn is None:
+        evaluate_fn = keyword_based_evaluate
 
     details = []
     old_correct = 0
@@ -451,8 +455,12 @@ def evaluate_prompts(
         variables = {"input": sample.input, "question": sample.input}
 
         # Render prompts
-        old_rendered = rule_based_render(old_template, variables)
-        new_rendered = rule_based_render(new_template, variables)
+        if render_fn is not None:
+            old_rendered = render_fn(old_template, variables)
+            new_rendered = render_fn(new_template, variables)
+        else:
+            old_rendered = rule_based_render(old_template, variables)
+            new_rendered = rule_based_render(new_template, variables)
 
         # Estimate tokens
         old_tokens = estimate_tokens(old_rendered)
@@ -461,10 +469,10 @@ def evaluate_prompts(
         new_total_tokens += new_tokens
 
         # Evaluate
-        old_output, old_match = keyword_based_evaluate(
+        old_output, old_match = evaluate_fn(
             old_rendered, sample.expected_output
         )
-        new_output, new_match = keyword_based_evaluate(
+        new_output, new_match = evaluate_fn(
             new_rendered, sample.expected_output
         )
 

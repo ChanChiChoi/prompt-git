@@ -984,20 +984,95 @@ result = evaluate_prompts(
 
 ### 自定义评估逻辑
 
-```python
-from promptgit.evaluator import EvalSample, SampleResult
+自定义评估函数需要遵循以下签名：
 
-def custom_evaluate(rendered_prompt, expected_output):
-    """自定义评估逻辑"""
-    # 例如：使用语义相似度而非关键词匹配
-    from sentence_transformers import SentenceTransformer
-    
-    model = SentenceTransformer('all-MiniLM-L6-v2')
-    embedding1 = model.encode(rendered_prompt)
-    embedding2 = model.encode(expected_output)
-    
-    similarity = cosine_similarity(embedding1, embedding2)
-    return similarity > 0.8
+```python
+def evaluate_fn(rendered_prompt: str, expected_output: str) -> tuple[str, bool]:
+    """自定义评估函数。
+
+    Args:
+        rendered_prompt: 渲染后的完整 prompt 文本。
+        expected_output: 数据集中的期望输出。
+
+    Returns:
+        (output, is_match) 元组：
+        - output: 生成的输出文本（用于 similarity_delta 计算）。
+        - is_match: 是否与期望输出匹配。
+    """
+```
+
+**示例：使用语义相似度替代关键词匹配**
+
+```python
+from promptgit.evaluator import evaluate_prompts
+from promptgit.schema import PromptTemplate
+from pathlib import Path
+from sentence_transformers import SentenceTransformer
+from difflib import SequenceMatcher
+
+# 加载模型（全局复用，避免重复加载）
+_model = SentenceTransformer('all-MiniLM-L6-v2')
+
+def semantic_evaluate(rendered_prompt, expected_output):
+    """使用语义嵌入计算相似度，阈值 0.8"""
+    embedding1 = _model.encode(rendered_prompt)
+    embedding2 = _model.encode(expected_output)
+
+    # 余弦相似度
+    from numpy import dot
+    from numpy.linalg import norm
+    similarity = dot(embedding1, embedding2) / (norm(embedding1) * norm(embedding2))
+
+    # 生成输出：取 rendered_prompt 中与 expected_output 相似度最高的片段
+    output = rendered_prompt  # 规则引擎模式下输出 = prompt 本身
+    is_match = similarity >= 0.8
+
+    return output, is_match
+
+# 使用
+old = PromptTemplate.from_yaml(Path("prompts/v1.yaml"))
+new = PromptTemplate.from_yaml(Path("prompts/v2.yaml"))
+dataset = load_dataset(Path("dataset.jsonl"))
+
+result = evaluate_prompts(
+    old_template=old,
+    new_template=new,
+    dataset=dataset,
+    threshold=0.05,
+    evaluate_fn=semantic_evaluate,  # 传入自定义评估函数
+)
+```
+
+**示例：同时使用自定义渲染和自定义评估**
+
+```python
+from promptgit.llm_evaluator import get_llm_config, llm_generate_output
+
+config = get_llm_config("openai", "gpt-4")
+
+def llm_render(template, variables):
+    """用 LLM 生成输出"""
+    return llm_generate_output(config, template, variables)
+
+def strict_match(rendered_prompt, expected_output):
+    """严格匹配：输出必须包含期望输出的全部关键词"""
+    from promptgit.evaluator import extract_keywords
+    expected_kw = extract_keywords(expected_output)
+    prompt_kw = extract_keywords(rendered_prompt)
+    if not expected_kw:
+        return rendered_prompt, True
+    matched = expected_kw & prompt_kw
+    is_match = len(matched) / len(expected_kw) >= 0.9  # 90% 关键词命中
+    return rendered_prompt, is_match
+
+result = evaluate_prompts(
+    old_template=old,
+    new_template=new,
+    dataset=dataset,
+    threshold=0.05,
+    render_fn=llm_render,
+    evaluate_fn=strict_match,
+)
 ```
 
 ### 批量评估
