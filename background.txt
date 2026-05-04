@@ -72,3 +72,31 @@ prompt-git ci
 AI 生成 YAML、Webhook 逻辑、Markdown 报告渲染；直接对接 CI/CD
 刻意不做的：Web UI、实时追踪、成本计费、团队协作权限。这些是 Langfuse 的腹地，做不过也消耗时间。
 
+目录结构
+prompt-git/
+├── pyproject.toml          # 使用 hatch/uv 管理依赖
+├── README.md
+├── LICENSE                 # MIT
+├── .pre-commit-config.yaml
+├── .github/
+│   └── workflows/
+│       └── test.yml        # 本地 CI 跑通后直接推送
+├── src/
+│   └── promptgit/
+│       ├── __init__.py
+│       ├── cli.py          # typer 入口
+│       ├── parser.py       # Pydantic Prompt Schema 校验
+│       ├── diff_engine.py  # 规则+语义 Diff 核心
+│       ├── evaluator.py    # 数据集 runner & 指标计算
+│       ├── ci_gen.py       # GitHub Actions YAML 生成器
+│       └── utils.py        # Git 操作、Rich 渲染、路径处理
+├── tests/
+│   ├── conftest.py
+│   ├── test_cli.py
+│   ├── test_diff.py
+│   ├── test_eval.py
+│   └── fixtures/           # 测试用 Prompt / Dataset 样本
+├── examples/
+│   └── ecommerce/          # 完整使用示例
+└── docs/
+    └── architecture.md     # 架构说明（面试/PR 必备）
