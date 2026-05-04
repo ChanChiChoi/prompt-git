@@ -51,6 +51,7 @@ Prompt 工程对 AI 应用至关重要，但管理 Prompt 的方式却混乱不�
 - **Git 原生**：Prompt 即文件，版本即提交
 - **CI 优先**：专为 GitHub Actions、pre-commit 和 PR 工作流设计
 - **离线可用**：无需 LLM API 也能工作（基于规则的评估）
+- **LLM 增强**：可选的 LLM-as-judge 评估，支持多提供商（OpenAI、Anthropic、本地模型）
 
 ---
 
@@ -245,7 +246,17 @@ pg diff [file] [--semantic] [--json]
 对数据集评估 Prompt。
 
 ```bash
+# 基于规则的评估（离线，无 LLM 依赖）
 pg eval --dataset <file.jsonl> [--threshold 0.05] [--json]
+
+# LLM 增强评估
+pg eval --dataset <file.jsonl> --provider openai --model gpt-4
+
+# LLM-as-judge 评估（更准确的评分）
+pg eval --dataset <file.jsonl> --provider openai --model gpt-4 --judge
+
+# 对比多个模型
+pg eval --dataset <file.jsonl> --compare-models gpt-3.5,gpt-4
 ```
 
 **数据集格式：**
@@ -257,6 +268,12 @@ pg eval --dataset <file.jsonl> [--threshold 0.05] [--json]
 - `accuracy_delta`：准确率变化（-1 到 +1）
 - `token_cost_delta`：Token 消耗变化
 - `consistency_score`：版本间一致性（0-1）
+
+**LLM 提供商：**
+- OpenAI（gpt-3.5、gpt-4 等）
+- Anthropic（claude-2、claude-3 等）
+- Ollama（本地模型）
+- 任何 LiteLLM 支持的提供商
 
 ### `pg ci init`
 

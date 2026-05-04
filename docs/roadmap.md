@@ -16,14 +16,14 @@
 
 ## 当前版本
 
-### v0.1.1 (当前)
+### v0.2.0 (当前)
 
 **核心功能：**
 - ✅ `pg init` - 初始化项目
 - ✅ `pg add` - 添加 Prompt
 - ✅ `pg commit` - 提交变更
 - ✅ `pg diff` - 语义 Diff
-- ✅ `pg eval` - 数据集评估
+- ✅ `pg eval` - 数据集评估（规则引擎 + LLM 增强）
 - ✅ `pg ci init` - CI 配置生成
 
 **评估能力：**
@@ -31,6 +31,9 @@
 - ✅ 关键词匹配
 - ✅ Token 估算
 - ✅ 一致性评分
+- ✅ LLM 增强评估（LiteLLM 集成）
+- ✅ LLM-as-judge 评估模式
+- ✅ 多模型对比评估
 
 **CI/CD：**
 - ✅ GitHub Actions 模板
@@ -46,16 +49,19 @@
 **目标：** 支持 LLM 作为评估后端
 
 ```
-[ ] 集成 LiteLLM
-[ ] 支持 OpenAI / Anthropic / 本地模型
-[ ] LLM-as-judge 评估模式
-[ ] 多模型对比评估
+[x] 集成 LiteLLM
+[x] 支持 OpenAI / Anthropic / 本地模型
+[x] LLM-as-judge 评估模式
+[x] 多模型对比评估
 ```
 
 **使用场景：**
 ```bash
 # 使用 LLM 评估
 pg eval --dataset data.jsonl --provider openai --model gpt-4
+
+# 使用 LLM-as-judge 评估
+pg eval --dataset data.jsonl --provider openai --model gpt-4 --judge
 
 # 对比不同模型
 pg eval --dataset data.jsonl --compare-models gpt-3.5,gpt-4
@@ -209,13 +215,13 @@ prompt-git-manager (核心)
 
 ## 发布计划
 
-| 版本 | 预计时间 | 主题 |
-|------|---------|------|
-| v0.2.0 | 2026 Q1 | LLM 评估 |
-| v0.2.1 | 2026 Q1 | 增强 Diff |
-| v0.3.0 | 2026 Q2 | 多 Prompt |
-| v0.4.0 | 2026 Q3 | 团队协作 |
-| v1.0.0 | 2026 Q4 | 正式版 |
+| 版本 | 预计时间 | 主题 | 状态 |
+|------|---------|------|------|
+| v0.2.0 | 2026 Q1 | LLM 评估 | ✅ 已完成 |
+| v0.2.1 | 2026 Q1 | 增强 Diff | 待开发 |
+| v0.3.0 | 2026 Q2 | 多 Prompt | 待开发 |
+| v0.4.0 | 2026 Q3 | 团队协作 | 待开发 |
+| v1.0.0 | 2026 Q4 | 正式版 | 待开发 |
 
 ---
 

@@ -51,6 +51,7 @@ Prompt engineering is becoming critical to AI applications, but managing prompts
 - **Git Native**: Prompts are files, versions are commits
 - **CI First**: Built for GitHub Actions, pre-commit, and PR workflows
 - **Offline Capable**: Works without LLM API access (rule-based evaluation)
+- **LLM Enhanced**: Optional LLM-as-judge evaluation with multi-provider support (OpenAI, Anthropic, local models)
 
 ---
 
@@ -245,7 +246,17 @@ pg diff [file] [--semantic] [--json]
 Evaluate prompts against a dataset.
 
 ```bash
+# Rule-based evaluation (offline, no LLM dependency)
 pg eval --dataset <file.jsonl> [--threshold 0.05] [--json]
+
+# LLM-enhanced evaluation
+pg eval --dataset <file.jsonl> --provider openai --model gpt-4
+
+# LLM-as-judge evaluation (more accurate scoring)
+pg eval --dataset <file.jsonl> --provider openai --model gpt-4 --judge
+
+# Compare multiple models
+pg eval --dataset <file.jsonl> --compare-models gpt-3.5,gpt-4
 ```
 
 **Dataset Format:**
@@ -257,6 +268,12 @@ pg eval --dataset <file.jsonl> [--threshold 0.05] [--json]
 - `accuracy_delta`: Change in accuracy (-1 to +1)
 - `token_cost_delta`: Change in token usage
 - `consistency_score`: Agreement between versions (0-1)
+
+**LLM Providers:**
+- OpenAI (gpt-3.5, gpt-4, etc.)
+- Anthropic (claude-2, claude-3, etc.)
+- Ollama (local models)
+- Any LiteLLM-supported provider
 
 ### `pg ci init`
 

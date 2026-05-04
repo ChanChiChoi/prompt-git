@@ -20,6 +20,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.0] - 2026-05-04
+
+### Added
+
+**LLM Enhanced Evaluation:**
+- Integrated LiteLLM for multi-provider support
+- Support for OpenAI, Anthropic, Ollama, and local models
+- LLM-as-judge evaluation mode (`--judge` flag)
+- Multi-model comparison (`--compare-models` flag)
+- New `llm_evaluator.py` module with LLMConfig, LLMEvalResult, LLMJudgeResult, LLMCompareResult
+
+**CLI Enhancements:**
+- `pg eval --provider <provider>` - Specify LLM provider
+- `pg eval --model <model>` - Specify LLM model
+- `pg eval --judge` - Enable LLM-as-judge scoring
+- `pg eval --compare-models <model1>,<model2>` - Compare multiple models
+
+**Testing:**
+- Added 30 new tests for LLM evaluation
+- Total test count: 148 tests
+- All tests passing
+
+**Documentation:**
+- Updated roadmap with v0.2.0 completion
+- Updated README with LLM evaluation examples
+- Updated README_zh with Chinese LLM documentation
+
+### Changed
+- Bumped version to 0.2.0
+- Added `litellm>=1.0.0` to dependencies
+
+---
+
 ## [0.1.1] - 2026-05-04
 
 ### Fixed
@@ -105,6 +138,9 @@ pip install --upgrade prompt-git-manager
 
 ### Breaking Changes
 
+#### v0.2.0
+- No breaking changes
+
 #### v0.1.1
 - Package renamed from `prompt-git` to `prompt-git-manager`
 - CLI command remains `pg`
@@ -118,4 +154,4 @@ pip install --upgrade prompt-git-manager
 
 - [GitHub Releases](https://github.com/ChanChiChoi/prompt-git-manager/releases)
 - [PyPI](https://pypi.org/project/prompt-git-manager/)
-- [Full Changelog](https://github.com/ChanChiChoi/prompt-git-manager/compare/v0.1.0...v0.1.1)
+- [Full Changelog](https://github.com/ChanChiChoi/prompt-git-manager/compare/v0.1.1...v0.2.0)

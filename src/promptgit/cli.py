@@ -442,13 +442,35 @@ def eval(
         0.05, "--threshold", "-t", help="Accuracy drop threshold (0-1)."
     ),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON."),
+    provider: Optional[str] = typer.Option(
+        None, "--provider", "-p", help="LLM provider (openai, anthropic, ollama, etc.)."
+    ),
+    model: Optional[str] = typer.Option(
+        None, "--model", "-m", help="LLM model name (e.g., gpt-4, claude-2)."
+    ),
+    compare_models: Optional[str] = typer.Option(
+        None, "--compare-models", "-c", help="Compare multiple models (comma-separated)."
+    ),
+    use_judge: bool = typer.Option(
+        False, "--judge", help="Use LLM-as-judge for evaluation."
+    ),
 ) -> None:
     """Evaluate prompt versions against a dataset.
 
     Compares old and new prompt versions, computing accuracy, token cost,
     and consistency metrics. Fails if accuracy drops more than threshold.
+
+    Use --provider and --model to enable LLM-based evaluation.
+    Use --compare-models to compare multiple models (e.g., gpt-3.5,gpt-4).
+    Use --judge to enable LLM-as-judge scoring.
     """
     from promptgit.evaluator import load_dataset, evaluate_prompts
+    from promptgit.llm_evaluator import (
+        get_llm_config,
+        evaluate_prompts_with_llm,
+        compare_models as compare_models_fn,
+        LLMCompareResult,
+    )
 
     repo = get_repo()
     prompts_dir = get_prompts_dir(repo)
@@ -502,8 +524,88 @@ def eval(
     except (FileNotFoundError, ValueError) as e:
         error_exit(str(e), ERR_VALIDATION)
 
-    # Run evaluation
-    result = evaluate_prompts(old_template, new_template, samples, threshold)
+    # Model comparison mode
+    if compare_models:
+        model_list = [m.strip() for m in compare_models.split(",")]
+        if len(model_list) < 2:
+            error_exit("Please provide at least 2 models for comparison.", ERR_ARGS)
+
+        console.print(f"[bold]Comparing models: {', '.join(model_list)}[/bold]")
+
+        # Compare first two models (extensible for more)
+        config_a = get_llm_config(provider or "openai", model_list[0])
+        config_b = get_llm_config(provider or "openai", model_list[1])
+
+        compare_results = compare_models_fn(
+            new_template, samples, config_a, config_b
+        )
+
+        # Output comparison results
+        if json_output:
+            output = {
+                "model_a": model_list[0],
+                "model_b": model_list[1],
+                "results": [r.to_dict() for r in compare_results],
+                "summary": {
+                    "wins_a": sum(1 for r in compare_results if r.winner == "A"),
+                    "wins_b": sum(1 for r in compare_results if r.winner == "B"),
+                    "ties": sum(1 for r in compare_results if r.winner == "Tie"),
+                },
+            }
+            typer.echo(json.dumps(output, indent=2, ensure_ascii=False))
+        else:
+            table = Table(title="Model Comparison", show_lines=True)
+            table.add_column("Sample", style="cyan")
+            table.add_column(f"Score ({model_list[0]})", style="white")
+            table.add_column(f"Score ({model_list[1]})", style="white")
+            table.add_column("Winner", style="bold")
+
+            for i, result in enumerate(compare_results, 1):
+                winner_style = {
+                    "A": f"[green]{model_list[0]}[/green]",
+                    "B": f"[green]{model_list[1]}[/green]",
+                    "Tie": "[yellow]Tie[/yellow]",
+                }.get(result.winner, result.winner)
+
+                table.add_row(
+                    f"Sample {i}",
+                    f"{result.score_a:.2f}",
+                    f"{result.score_b:.2f}",
+                    winner_style,
+                )
+
+            console.print(table)
+
+            # Summary
+            wins_a = sum(1 for r in compare_results if r.winner == "A")
+            wins_b = sum(1 for r in compare_results if r.winner == "B")
+            ties = sum(1 for r in compare_results if r.winner == "Tie")
+
+            console.print(f"\n[bold]Summary:[/bold]")
+            console.print(f"  {model_list[0]} wins: {wins_a}")
+            console.print(f"  {model_list[1]} wins: {wins_b}")
+            console.print(f"  Ties: {ties}")
+
+            overall_winner = model_list[0] if wins_a > wins_b else model_list[1] if wins_b > wins_a else "Tie"
+            console.print(f"\n[bold green]Overall winner: {overall_winner}[/bold green]")
+
+        # Cleanup temp file
+        if not old_file:
+            old_path.unlink(missing_ok=True)
+        return
+
+    # LLM evaluation mode
+    if provider and model:
+        config = get_llm_config(provider, model)
+
+        console.print(f"[bold]Using LLM evaluation: {provider}/{model}[/bold]")
+
+        result = evaluate_prompts_with_llm(
+            old_template, new_template, samples, config, threshold, use_judge
+        )
+    else:
+        # Rule-based evaluation (default)
+        result = evaluate_prompts(old_template, new_template, samples, threshold)
 
     # Cleanup temp file
     if not old_file:
@@ -535,6 +637,13 @@ def eval(
         status = "[green]PASSED[/green]" if result.passed else "[red]FAILED[/red]"
         table.add_row("Status", status)
         table.add_row("Threshold", f"{result.threshold:.1%}")
+
+        # Show LLM-specific info
+        if provider and model:
+            table.add_row("Provider", provider)
+            table.add_row("Model", model)
+            if use_judge:
+                table.add_row("Judge Mode", "LLM-as-judge")
 
         console.print(table)
 

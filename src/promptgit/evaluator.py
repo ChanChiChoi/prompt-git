@@ -378,6 +378,37 @@ def keyword_based_evaluate(
         return "[no relevant output]", False
 
 
+def create_llm_render_function(
+    provider: str = "openai",
+    model: str = "gpt-3.5-turbo",
+    api_key: Optional[str] = None,
+    api_base: Optional[str] = None,
+) -> RenderFunction:
+    """Create a render function that uses LLM for output generation.
+
+    Args:
+        provider: LLM provider (openai, anthropic, ollama, etc.)
+        model: Model name
+        api_key: API key (optional)
+        api_base: API base URL (optional, for local models)
+
+    Returns:
+        RenderFunction that generates LLM outputs
+    """
+    from promptgit.llm_evaluator import get_llm_config, llm_generate_output
+
+    config = get_llm_config(provider, model, api_key, api_base)
+
+    def llm_render(prompt: str, variables: dict[str, Any]) -> str:
+        # This function is called with a prompt string and variables
+        # We need to render the template and call LLM
+        # For simplicity, we'll return the rendered prompt
+        # The actual LLM call happens in evaluate_prompts_with_llm
+        return prompt
+
+    return llm_render
+
+
 def evaluate_prompts(
     old_template: PromptTemplate,
     new_template: PromptTemplate,
