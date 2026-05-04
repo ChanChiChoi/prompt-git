@@ -9,6 +9,7 @@
   <a href="#quick-start">Quick Start</a> •
   <a href="#commands">Commands</a> •
   <a href="#ci-integration">CI Integration</a> •
+  <a href="./docs/index.md">Docs</a> •
   <a href="#contributing">Contributing</a> •
   <a href="./README_zh.md">中文</a>
 </p>
@@ -50,6 +51,19 @@ Prompt engineering is becoming critical to AI applications, but managing prompts
 - **Git Native**: Prompts are files, versions are commits
 - **CI First**: Built for GitHub Actions, pre-commit, and PR workflows
 - **Offline Capable**: Works without LLM API access (rule-based evaluation)
+
+---
+
+## Documentation
+
+📖 **[完整文档目录](./docs/index.md)**
+
+| 文档 | 说明 |
+|------|------|
+| [快速开始](./docs/quickstart.md) | 5 分钟上手指南 |
+| [CLI 参考](./docs/cli_reference.md) | 所有命令详解 |
+| [架构文档](./docs/architecture.md) | 内部实现原理 |
+| [故障排除](./docs/TROUBLESHOOTING.md) | 常见问题解决 |
 
 ---
 

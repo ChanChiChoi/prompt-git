@@ -10,6 +10,7 @@ from typing import Optional
 import typer
 from git import GitCommandError
 from rich.console import Console
+from rich.table import Table
 
 from promptgit import __version__
 from promptgit.schema import CommitRecord, PromptTemplate
@@ -94,7 +95,9 @@ def init(
                 "# Prompt-git internal files\n*.tmp\n", encoding="utf-8"
             )
 
-        console.print(f"[green]✓[/green] Initialized prompt-git-manager in {prompts_dir}")
+        console.print(
+            f"[green]✓[/green] Initialized prompt-git-manager in {prompts_dir}"
+        )
         render_table(
             "Initialized",
             ["Item", "Path"],
@@ -376,8 +379,6 @@ def diff(
             output = {f: r.to_dict() for f, r in results}
             typer.echo(json.dumps(output, indent=2, ensure_ascii=False))
         else:
-            from rich.table import Table
-
             for f, result in results:
                 table = Table(title=f"Diff: {f}", show_lines=True)
                 table.add_column("Field", style="cyan", min_width=20)

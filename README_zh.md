@@ -9,6 +9,7 @@
   <a href="#快速开始">快速开始</a> •
   <a href="#命令">命令</a> •
   <a href="#ci-集成">CI 集成</a> •
+  <a href="./docs/index.md">文档</a> •
   <a href="#贡献">贡献</a> •
   <a href="./README.md">English</a>
 </p>
@@ -50,6 +51,19 @@ Prompt 工程对 AI 应用至关重要，但管理 Prompt 的方式却混乱不�
 - **Git 原生**：Prompt 即文件，版本即提交
 - **CI 优先**：专为 GitHub Actions、pre-commit 和 PR 工作流设计
 - **离线可用**：无需 LLM API 也能工作（基于规则的评估）
+
+---
+
+## 文档
+
+📖 **[完整文档目录](./docs/index.md)**
+
+| 文档 | 说明 |
+|------|------|
+| [快速开始](./docs/quickstart.md) | 5 分钟上手指南 |
+| [CLI 参考](./docs/cli_reference.md) | 所有命令详解 |
+| [架构文档](./docs/architecture.md) | 内部实现原理 |
+| [故障排除](./docs/TROUBLESHOOTING.md) | 常见问题解决 |
 
 ---
 
