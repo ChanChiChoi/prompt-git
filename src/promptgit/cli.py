@@ -443,10 +443,10 @@ def eval(
     ),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON."),
     provider: Optional[str] = typer.Option(
-        None, "--provider", "-p", help="LLM provider (openai, anthropic, ollama, etc.)."
+        None, "--provider", "-p", help="LLM provider (openai, anthropic, ollama, vllm, sglang)."
     ),
     model: Optional[str] = typer.Option(
-        None, "--model", "-m", help="LLM model name (e.g., gpt-4, claude-2)."
+        None, "--model", "-m", help="LLM model name (e.g., gpt-4, claude-2, llama2)."
     ),
     compare_models: Optional[str] = typer.Option(
         None, "--compare-models", "-c", help="Compare multiple models (comma-separated)."

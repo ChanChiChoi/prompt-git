@@ -39,6 +39,8 @@ class LLMConfig:
             "openai": "openai/",
             "anthropic": "anthropic/",
             "ollama": "ollama/",
+            "vllm": "openai/",  # vLLM uses OpenAI-compatible API
+            "sglang": "openai/",  # SGLang uses OpenAI-compatible API
             "huggingface": "huggingface/",
         }
         prefix = provider_prefixes.get(self.provider, "")
@@ -131,7 +133,7 @@ def get_llm_config(
     """Create LLM configuration from provider and model.
 
     Args:
-        provider: LLM provider name (openai, anthropic, ollama, etc.)
+        provider: LLM provider name (openai, anthropic, ollama, vllm, sglang, etc.)
         model: Model name
         api_key: API key (optional, can use env vars)
         api_base: API base URL (optional, for local models)
@@ -139,16 +141,33 @@ def get_llm_config(
     Returns:
         LLMConfig instance
     """
+    # Default API base URLs for local providers
+    default_api_bases = {
+        "ollama": "http://localhost:11434",
+        "vllm": "http://localhost:8000/v1",
+        "sglang": "http://localhost:30000/v1",
+    }
+
+    # Use default API base if not specified
+    if api_base is None and provider in default_api_bases:
+        api_base = default_api_bases[provider]
+
     # Auto-detect API key from environment
     if api_key is None:
         env_keys = {
             "openai": "OPENAI_API_KEY",
             "anthropic": "ANTHROPIC_API_KEY",
             "ollama": "OLLAMA_API_KEY",
+            "vllm": "VLLM_API_KEY",
+            "sglang": "SGLANG_API_KEY",
         }
         env_var = env_keys.get(provider)
         if env_var:
             api_key = os.environ.get(env_var)
+
+    # For local providers, use a dummy API key if not set
+    if api_key is None and provider in ("ollama", "vllm", "sglang"):
+        api_key = "dummy"
 
     return LLMConfig(
         provider=provider,

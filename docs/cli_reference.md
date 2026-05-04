@@ -425,6 +425,8 @@ Overall winner: gpt-4
 | `OPENAI_API_BASE` | OpenAI API base URL | `https://api.openai.com/v1` |
 | `ANTHROPIC_API_KEY` | Anthropic API key | - |
 | `OLLAMA_API_BASE` | Ollama API base URL | `http://localhost:11434` |
+| `VLLM_API_BASE` | vLLM API base URL | `http://localhost:8000/v1` |
+| `SGLANG_API_BASE` | SGLang API base URL | `http://localhost:30000/v1` |
 
 ---
 

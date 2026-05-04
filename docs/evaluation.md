@@ -31,6 +31,8 @@
 
 ### 评估流程
 
+#### 规则引擎模式（默认）
+
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
 │  数据集      │     │  旧版本      │     │  新版本      │
@@ -41,7 +43,7 @@
                            │
                            ▼
                   ┌─────────────────┐
-                  │   评估引擎       │
+                  │   规则引擎       │
                   │                 │
                   │ 1. 渲染模板     │
                   │ 2. 关键词匹配   │
@@ -59,12 +61,108 @@
                   └─────────────────┘
 ```
 
+#### LLM 增强模式
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  数据集      │     │  旧版本      │     │  新版本      │
+│  (JSONL)    │     │  (HEAD)     │     │  (Working)  │
+└──────┬──────┘     └──────┬──────┘     └──────┬──────┘
+       │                   │                   │
+       └───────────────────┼───────────────────┘
+                           │
+                           ▼
+                  ┌─────────────────┐
+                  │   渲染模板       │
+                  │                 │
+                  │ 替换 {{变量}}   │
+                  │ 组合 prompt     │
+                  └────────┬────────┘
+                           │
+                           ▼
+         ┌─────────────────┴─────────────────┐
+         │                                   │
+         ▼                                   ▼
+┌─────────────────┐                 ┌─────────────────┐
+│  旧版本 LLM     │                 │  新版本 LLM     │
+│                 │                 │                 │
+│ 调用 API 生成   │                 │ 调用 API 生成   │
+│ 实际输出        │                 │ 实际输出        │
+└────────┬────────┘                 └────────┬────────┘
+         │                                   │
+         └─────────────────┬─────────────────┘
+                           │
+                           ▼
+                  ┌─────────────────┐
+                  │   比较输出       │
+                  │                 │
+                  │ vs 期望输出     │
+                  │ 计算相似度      │
+                  └────────┬────────┘
+                           │
+                           ▼
+                  ┌─────────────────┐
+                  │   评估结果       │
+                  │                 │
+                  │ accuracy_delta  │
+                  │ token_cost      │
+                  │ consistency     │
+                  │ passed (bool)   │
+                  └─────────────────┘
+```
+
+#### LLM-as-Judge 模式
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  数据集      │     │  旧版本      │     │  新版本      │
+│  (JSONL)    │     │  (HEAD)     │     │  (Working)  │
+└──────┬──────┘     └──────┬──────┘     └──────┬──────┘
+       │                   │                   │
+       └───────────────────┼───────────────────┘
+                           │
+                           ▼
+                  ┌─────────────────┐
+                  │   渲染模板       │
+                  └────────┬────────┘
+                           │
+                           ▼
+         ┌─────────────────┴─────────────────┐
+         │                                   │
+         ▼                                   ▼
+┌─────────────────┐                 ┌─────────────────┐
+│  旧版本 LLM     │                 │  新版本 LLM     │
+│  生成实际输出    │                 │  生成实际输出    │
+└────────┬────────┘                 └────────┬────────┘
+         │                                   │
+         └─────────────────┬─────────────────┘
+                           │
+                           ▼
+                  ┌─────────────────┐
+                  │   LLM Judge     │
+                  │                 │
+                  │ 评估输出质量    │
+                  │ 给出 0-1 评分   │
+                  │ 提供评分理由    │
+                  └────────┬────────┘
+                           │
+                           ▼
+                  ┌─────────────────┐
+                  │   评估结果       │
+                  │                 │
+                  │ accuracy_delta  │
+                  │ judge_scores    │
+                  │ passed (bool)   │
+                  └─────────────────┘
+```
+
 ### 评估模式
 
 | 模式 | 说明 | 依赖 |
 |------|------|------|
 | 规则引擎（默认） | 基于关键词匹配 | 无外部依赖 |
-| LLM 增强 | 使用 LLM 评判 | 需要 API Key |
+| LLM 增强 | 使用 LLM 生成输出并评估 | 需要 API Key |
+| LLM-as-Judge | 使用 LLM 作为评判者 | 需要 API Key |
 
 ---
 
@@ -304,6 +402,192 @@ export PROMPT_GIT_THRESHOLD=0.10
 
 ---
 
+## 评估原理
+
+### 三种评估模式对比
+
+| 特性 | 规则引擎 | LLM 增强 | LLM-as-Judge |
+|------|---------|----------|--------------|
+| **输出生成** | 模拟（关键词匹配） | 真实 LLM 调用 | 真实 LLM 调用 |
+| **评估方式** | 关键词匹配 | 文本相似度 | LLM 评分 |
+| **准确性** | 低（启发式） | 中 | 高 |
+| **速度** | 快（<1s） | 慢（10-60s） | 最慢（20-120s） |
+| **成本** | 免费 | 按 token 计费 | 按 token 计费 x2 |
+| **离线支持** | ✅ | ❌ | ❌ |
+| **适用场景** | 快速验证、CI | 正式评估 | 精确评估 |
+
+### 规则引擎原理
+
+规则引擎通过启发式方法模拟 LLM 输出，不实际调用 API：
+
+```python
+# 1. 渲染模板
+rendered_prompt = render_template(template, variables)
+
+# 2. 提取期望输出的关键词
+expected_keywords = extract_keywords(expected_output)
+# 例如: "Python is a programming language" -> {"python", "programming", "language"}
+
+# 3. 检查 prompt 中是否包含这些关键词
+matched_keywords = {kw for kw in expected_keywords if kw in rendered_prompt.lower()}
+
+# 4. 计算匹配率
+match_ratio = len(matched_keywords) / len(expected_keywords)
+
+# 5. 判断匹配程度
+if match_ratio >= 0.5:
+    return expected_output, True   # 完全匹配
+elif match_ratio >= 0.2:
+    return partial_output, False   # 部分匹配
+else:
+    return "[no output]", False    # 无匹配
+```
+
+**优点：**
+- 无需 API 调用，完全离线
+- 执行速度快（<1 秒）
+- 结果确定性强
+
+**缺点：**
+- 无法真正评估 LLM 输出质量
+- 依赖关键词匹配，可能误判
+- 无法评估语义相似度
+
+### LLM 增强评估原理
+
+LLM 增强模式实际调用 LLM API 生成输出，然后与期望输出比较：
+
+```python
+# 1. 渲染模板
+old_prompt = render_template(old_template, variables)
+new_prompt = render_template(new_template, variables)
+
+# 2. 调用 LLM API 生成输出
+old_output = llm_api.call(old_template.system_prompt, old_prompt)
+new_output = llm_api.call(new_template.system_prompt, new_prompt)
+
+# 3. 与期望输出比较（使用文本相似度）
+old_similarity = compute_similarity(old_output, expected_output)
+new_similarity = compute_similarity(new_output, expected_output)
+
+# 4. 判断是否匹配（阈值 0.7）
+old_match = old_similarity >= 0.7
+new_match = new_similarity >= 0.7
+```
+
+**相似度计算：**
+```python
+from difflib import SequenceMatcher
+
+def compute_similarity(text1, text2):
+    """计算两段文本的相似度（0-1）"""
+    return SequenceMatcher(None, text1, text2).ratio()
+```
+
+**优点：**
+- 真实评估 LLM 输出
+- 能发现实际的性能差异
+- 结果更可靠
+
+**缺点：**
+- 需要 API 调用，有成本
+- 执行速度慢（取决于 API 响应）
+- 受 LLM 随机性影响
+
+### LLM-as-Judge 原理
+
+LLM-as-Judge 使用另一个 LLM 来评判输出质量，提供更准确的评分：
+
+```python
+# 1. 渲染模板并生成输出（同 LLM 增强模式）
+old_output = llm_api.call(old_template.system_prompt, old_prompt)
+new_output = llm_api.call(new_template.system_prompt, new_prompt)
+
+# 2. 使用 LLM 作为评判者
+judge_prompt = f"""
+You are an expert evaluator. Please evaluate the quality of the AI's response.
+
+## Original Prompt
+{rendered_prompt}
+
+## Expected Output
+{expected_output}
+
+## Actual Output
+{actual_output}
+
+## Evaluation Criteria
+1. Does the actual output convey the same meaning as the expected output?
+2. Is the actual output factually accurate?
+3. Is the actual output clear and well-structured?
+
+## Response Format
+Please respond with a JSON object containing:
+- "score": a float between 0.0 and 1.0 (1.0 = perfect match)
+- "reasoning": a brief explanation of your evaluation
+"""
+
+# 3. 调用 Judge LLM
+judge_response = llm_api.call("You are an expert evaluator.", judge_prompt)
+result = json.loads(judge_response)
+
+# 4. 解析评分
+score = result["score"]  # 0.0 - 1.0
+reasoning = result["reasoning"]
+
+# 5. 判断是否匹配（阈值 0.7）
+is_match = score >= 0.7
+```
+
+**评分标准：**
+
+| 分数 | 含义 | 说明 |
+|------|------|------|
+| 0.9-1.0 | 完美匹配 | 输出与期望几乎完全一致 |
+| 0.8-0.9 | 高度匹配 | 核心信息一致，细节略有不同 |
+| 0.6-0.8 | 部分匹配 | 包含关键信息，但缺少部分内容 |
+| 0.4-0.6 | 勉强相关 | 有一定相关性，但偏差较大 |
+| 0.0-0.4 | 不相关 | 输出与期望无关或完全错误 |
+
+**优点：**
+- 最准确的评估方式
+- 能理解语义相似度
+- 提供评分理由，便于分析
+
+**缺点：**
+- 成本最高（两次 API 调用）
+- 执行速度最慢
+- 评判标准可能因 LLM 而异
+
+### 评估流程变化
+
+使用 LLM 后，评估流程的主要变化：
+
+| 阶段 | 规则引擎 | LLM 增强 | LLM-as-Judge |
+|------|---------|----------|--------------|
+| 1. 渲染模板 | ✅ 相同 | ✅ 相同 | ✅ 相同 |
+| 2. 生成输出 | 模拟 | LLM API | LLM API |
+| 3. 评估输出 | 关键词匹配 | 文本相似度 | LLM 评分 |
+| 4. 计算指标 | ✅ 相同 | ✅ 相同 | ✅ 相同 |
+
+**关键区别：**
+- **步骤 2**：规则引擎模拟输出，LLM 模式实际调用 API
+- **步骤 3**：规则引擎用关键词匹配，LLM 模式用相似度或 LLM 评分
+
+### 选择建议
+
+| 场景 | 推荐模式 | 原因 |
+|------|---------|------|
+| CI/CD 流水线 | 规则引擎 | 快速、免费、确定性强 |
+| 开发阶段快速验证 | 规则引擎 | 即时反馈 |
+| 正式评估前的预检 | LLM 增强 | 发现实际问题 |
+| 最终发布前评估 | LLM-as-Judge | 最准确 |
+| 模型选型对比 | LLM-as-Judge | 公平比较 |
+| 成本敏感场景 | 规则引擎 | 零成本 |
+| 隐私敏感场景 | 规则引擎 | 无需发送数据 |
+
+---
+
 ## 评估算法
 
 ### 规则引擎（默认）
@@ -435,23 +719,36 @@ config = get_llm_config(
     api_base="https://your-proxy.com/v1"
 )
 
-# 方式 4：使用 Ollama 本地模型
+# 方式 4：使用 Ollama 本地模型（默认 API Base: http://localhost:11434）
 config = get_llm_config(
     provider="ollama",
-    model="llama2",
-    api_base="http://localhost:11434"
+    model="llama2"
+)
+
+# 方式 5：使用 vLLM 本地模型（默认 API Base: http://localhost:8000/v1）
+config = get_llm_config(
+    provider="vllm",
+    model="meta-llama/Llama-2-7b-chat-hf"
+)
+
+# 方式 6：使用 SGLang 本地模型（默认 API Base: http://localhost:30000/v1）
+config = get_llm_config(
+    provider="sglang",
+    model="Qwen/Qwen2-7B-Instruct"
 )
 ```
 
 #### 支持的提供商
 
-| 提供商 | provider 参数 | 模型示例 | API Key 环境变量 |
-|--------|--------------|----------|-----------------|
-| OpenAI | `openai` | `gpt-4`, `gpt-3.5-turbo`, `gpt-4-turbo` | `OPENAI_API_KEY` |
-| Anthropic | `anthropic` | `claude-3-opus-20240229`, `claude-3-sonnet-20240229` | `ANTHROPIC_API_KEY` |
-| Ollama | `ollama` | `llama2`, `mistral`, `codellama` | 无需（本地） |
-| Azure OpenAI | `azure` | `gpt-4`, `gpt-35-turbo` | `AZURE_API_KEY` |
-| 其他 | LiteLLM 支持的任意提供商 | - | 视提供商而定 |
+| 提供商 | provider 参数 | 模型示例 | 默认 API Base | API Key 环境变量 |
+|--------|--------------|----------|---------------|-----------------|
+| OpenAI | `openai` | `gpt-4`, `gpt-3.5-turbo`, `gpt-4-turbo` | `https://api.openai.com/v1` | `OPENAI_API_KEY` |
+| Anthropic | `anthropic` | `claude-3-opus-20240229`, `claude-3-sonnet-20240229` | - | `ANTHROPIC_API_KEY` |
+| Ollama | `ollama` | `llama2`, `mistral`, `codellama`, `qwen2` | `http://localhost:11434` | 无需 |
+| vLLM | `vllm` | `meta-llama/Llama-2-7b-chat-hf`, `Qwen/Qwen2-7B-Instruct` | `http://localhost:8000/v1` | 无需 |
+| SGLang | `sglang` | `meta-llama/Llama-2-7b-chat-hf`, `Qwen/Qwen2-7B-Instruct` | `http://localhost:30000/v1` | 无需 |
+| Azure OpenAI | `azure` | `gpt-4`, `gpt-35-turbo` | - | `AZURE_API_KEY` |
+| 其他 | LiteLLM 支持的任意提供商 | - | - | 视提供商而定 |
 
 #### LLM-as-Judge 模式
 
@@ -513,7 +810,9 @@ Overall winner: gpt-4
 | 准确评估 | `--provider openai --model gpt-4` |
 | 最高准确性 | `--provider openai --model gpt-4 --judge` |
 | 成本敏感 | `--provider openai --model gpt-3.5-turbo` |
-| 隐私敏感 | `--provider ollama --model llama2` |
+| 隐私敏感（简单） | `--provider ollama --model llama2` |
+| 隐私敏感（高性能） | `--provider vllm --model meta-llama/Llama-2-7b-chat-hf` |
+| 大规模推理 | `--provider sglang --model Qwen/Qwen2-7B-Instruct` |
 | 模型选型 | `--compare-models model1,model2` |
 
 #### 成本估算
@@ -525,6 +824,8 @@ Overall winner: gpt-4
 | claude-3-sonnet | ~$3 | Anthropic 中端 |
 | claude-3-opus | ~$15-45 | Anthropic 高端 |
 | Ollama (本地) | $0 | 需要本地 GPU |
+| vLLM (本地) | $0 | 高性能推理，支持连续批处理 |
+| SGLang (本地) | $0 | 高吞吐量，支持 RadixAttention |
 
 **注意：** 实际成本取决于 prompt 长度和输出长度。上述为粗略估算。
 

@@ -85,6 +85,8 @@
 | `OPENAI_API_BASE` | OpenAI API Base URL | `https://api.openai.com/v1` |
 | `ANTHROPIC_API_KEY` | Anthropic API Key | - |
 | `OLLAMA_API_BASE` | Ollama API Base URL | `http://localhost:11434` |
+| `VLLM_API_BASE` | vLLM API Base URL | `http://localhost:8000/v1` |
+| `SGLANG_API_BASE` | SGLang API Base URL | `http://localhost:30000/v1` |
 
 ### 设置方式
 
@@ -325,11 +327,22 @@ config = get_llm_config(
     api_base="https://api.openai.com/v1"
 )
 
-# 方式 3：使用 Ollama 本地模型
+# 方式 3：使用 Ollama 本地模型（默认 API Base: http://localhost:11434）
 config = get_llm_config(
     provider="ollama",
-    model="llama2",
-    api_base="http://localhost:11434"
+    model="llama2"
+)
+
+# 方式 4：使用 vLLM 本地模型（默认 API Base: http://localhost:8000/v1）
+config = get_llm_config(
+    provider="vllm",
+    model="meta-llama/Llama-2-7b-chat-hf"
+)
+
+# 方式 5：使用 SGLang 本地模型（默认 API Base: http://localhost:30000/v1）
+config = get_llm_config(
+    provider="sglang",
+    model="Qwen/Qwen2-7B-Instruct"
 )
 
 # 运行评估
@@ -344,12 +357,14 @@ result = evaluate_prompts_with_llm(
 
 ### 支持的提供商
 
-| 提供商 | provider 参数 | 环境变量 | 示例模型 |
-|--------|--------------|----------|----------|
-| OpenAI | `openai` | `OPENAI_API_KEY` | `gpt-4`, `gpt-3.5-turbo` |
-| Anthropic | `anthropic` | `ANTHROPIC_API_KEY` | `claude-3-opus-20240229` |
-| Ollama | `ollama` | 无需 | `llama2`, `mistral` |
-| Azure OpenAI | `azure` | `AZURE_API_KEY` | `gpt-4` |
+| 提供商 | provider 参数 | 默认 API Base | 环境变量 | 示例模型 |
+|--------|--------------|---------------|----------|----------|
+| OpenAI | `openai` | `https://api.openai.com/v1` | `OPENAI_API_KEY` | `gpt-4`, `gpt-3.5-turbo` |
+| Anthropic | `anthropic` | - | `ANTHROPIC_API_KEY` | `claude-3-opus-20240229` |
+| Ollama | `ollama` | `http://localhost:11434` | 无需 | `llama2`, `mistral`, `qwen2` |
+| vLLM | `vllm` | `http://localhost:8000/v1` | 无需 | `meta-llama/Llama-2-7b-chat-hf` |
+| SGLang | `sglang` | `http://localhost:30000/v1` | 无需 | `Qwen/Qwen2-7B-Instruct` |
+| Azure OpenAI | `azure` | - | `AZURE_API_KEY` | `gpt-4` |
 
 ### 自定义 API Base
 
@@ -360,9 +375,18 @@ result = evaluate_prompts_with_llm(
 pg eval --dataset data.jsonl --provider openai --model gpt-4 \
   --api-base "https://your-proxy.com/v1"
 
-# 使用 Ollama 本地模型
-pg eval --dataset data.jsonl --provider ollama --model llama2 \
-  --api-base "http://localhost:11434"
+# 使用 Ollama 本地模型（默认端口 11434）
+pg eval --dataset data.jsonl --provider ollama --model llama2
+
+# 使用 vLLM 本地模型（默认端口 8000）
+pg eval --dataset data.jsonl --provider vllm --model meta-llama/Llama-2-7b-chat-hf
+
+# 使用 SGLang 本地模型（默认端口 30000）
+pg eval --dataset data.jsonl --provider sglang --model Qwen/Qwen2-7B-Instruct
+
+# 自定义端口
+pg eval --dataset data.jsonl --provider vllm --model llama2 \
+  --api-base "http://localhost:8080/v1"
 
 # 使用 Azure OpenAI
 pg eval --dataset data.jsonl --provider azure --model gpt-4 \
