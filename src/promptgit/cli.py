@@ -1,4 +1,4 @@
-"""Typer CLI entry point for prompt-git."""
+"""Typer CLI entry point for prompt-git-manager."""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ app = typer.Typer(
 def version_callback(value: bool) -> None:
     """Print version and exit."""
     if value:
-        typer.echo(f"prompt-git {__version__}")
+        typer.echo(f"prompt-git-manager {__version__}")
         raise typer.Exit()
 
 
@@ -52,7 +52,7 @@ def main(
         help="Show version and exit.",
     ),
 ) -> None:
-    """prompt-git: Git-native prompt version control & CI guardrail tool."""
+    """prompt-git-manager: Git-native prompt version control & CI guardrail tool."""
 
 
 @app.command()
@@ -94,7 +94,7 @@ def init(
                 "# Prompt-git internal files\n*.tmp\n", encoding="utf-8"
             )
 
-        console.print(f"[green]✓[/green] Initialized prompt-git in {prompts_dir}")
+        console.print(f"[green]✓[/green] Initialized prompt-git-manager in {prompts_dir}")
         render_table(
             "Initialized",
             ["Item", "Path"],

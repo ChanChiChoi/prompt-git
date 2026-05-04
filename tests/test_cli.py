@@ -1,4 +1,4 @@
-"""Tests for prompt-git CLI commands."""
+"""Tests for prompt-git-manager CLI commands."""
 
 from __future__ import annotations
 

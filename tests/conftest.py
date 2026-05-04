@@ -1,4 +1,4 @@
-"""Pytest fixtures for prompt-git tests."""
+"""Pytest fixtures for prompt-git-manager tests."""
 
 from __future__ import annotations
 

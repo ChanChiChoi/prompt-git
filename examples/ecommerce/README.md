@@ -20,7 +20,7 @@ examples/ecommerce/
 # Navigate to example directory
 cd examples/ecommerce
 
-# Initialize prompt-git
+# Initialize prompt-git-manager
 pg init
 
 # Add the prompt
@@ -45,7 +45,7 @@ cat eval_report.json
 mkdir -p ecommerce-workflow
 cd ecommerce-workflow
 
-# Initialize git and prompt-git
+# Initialize git and prompt-git-manager
 git init
 pg init
 

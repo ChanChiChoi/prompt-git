@@ -1,4 +1,4 @@
-# prompt-git
+# prompt-git-manager
 
 <p align="center">
   <strong>Git-native prompt version control & CI guardrail tool</strong>
@@ -22,7 +22,7 @@
 
 ---
 
-## Why prompt-git?
+## Why prompt-git-manager?
 
 ### The Problem
 
@@ -35,9 +35,9 @@ Prompt engineering is becoming critical to AI applications, but managing prompts
 
 ### The Solution
 
-**prompt-git** brings software engineering best practices to prompt management:
+**prompt-git-manager** brings software engineering best practices to prompt management:
 
-| Feature | Traditional Approach | prompt-git |
+| Feature | Traditional Approach | prompt-git-manager |
 |---------|---------------------|------------|
 | Version Control | Copy-paste in docs | Git-native commits |
 | Change Detection | Manual review | Semantic diff |
@@ -58,20 +58,20 @@ Prompt engineering is becoming critical to AI applications, but managing prompts
 ### Using uv (Recommended)
 
 ```bash
-uv pip install prompt-git
+uv pip install prompt-git-manager
 ```
 
 ### Using pip
 
 ```bash
-pip install prompt-git
+pip install prompt-git-manager
 ```
 
 ### From Source
 
 ```bash
-git clone https://github.com/yourusername/prompt-git.git
-cd prompt-git
+git clone https://github.com/ChanChiChoi/prompt-git-manager.git
+cd prompt-git-manager
 uv sync
 ```
 
@@ -79,7 +79,7 @@ uv sync
 
 ```bash
 pg --version
-# prompt-git 0.1.0
+# prompt-git-manager 0.1.0
 ```
 
 ---
@@ -159,7 +159,7 @@ pg eval --dataset fixtures/dataset.jsonl --threshold 0.05
 
 ### `pg init`
 
-Initialize prompt-git in your repository.
+Initialize prompt-git-manager in your repository.
 
 ```bash
 pg init [--dry-run]
@@ -289,8 +289,8 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install prompt-git
-        run: pip install prompt-git
+      - name: Install prompt-git-manager
+        run: pip install prompt-git-manager
 
       - name: Run diff
         run: pg diff --semantic --json > diff.json
@@ -419,7 +419,7 @@ echo "All checks passed!"
 ## Architecture
 
 ```
-prompt-git/
+prompt-git-manager/
 ├── src/promptgit/
 │   ├── __init__.py          # Version
 │   ├── cli.py               # Typer CLI entry point
@@ -458,8 +458,8 @@ prompt-git/
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/prompt-git.git
-cd prompt-git
+git clone https://github.com/ChanChiChoi/prompt-git-manager.git
+cd prompt-git-manager
 
 # Install with dev dependencies
 uv sync --extra dev
@@ -528,7 +528,7 @@ git checkout -b feature/update-qa-prompt
 # 2. Make prompt changes
 vim .prompts/qa_prompt.yaml
 
-# 3. Commit with prompt-git
+# 3. Commit with prompt-git-manager
 pg commit -m "Improve QA prompt accuracy"
 
 # 4. Push branch
@@ -582,7 +582,7 @@ gh pr merge 42 --squash
 
 ### Q: Why not use Langfuse/Weights & Biases?
 
-**A:** Those are great runtime monitoring tools. prompt-git focuses on **development-time** workflow:
+**A:** Those are great runtime monitoring tools. prompt-git-manager focuses on **development-time** workflow:
 - Git-native (no new tool to learn)
 - CI-first (catches issues before deploy)
 - Zero infrastructure (no servers to maintain)

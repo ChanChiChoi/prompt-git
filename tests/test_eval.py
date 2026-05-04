@@ -1,4 +1,4 @@
-"""Tests for prompt-git evaluator."""
+"""Tests for prompt-git-manager evaluator."""
 
 from __future__ import annotations
 

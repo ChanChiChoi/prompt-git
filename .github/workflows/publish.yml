@@ -11,7 +11,7 @@
 # Setup required:
 #   1. Go to https://pypi.org/manage/account/publishing/
 #   2. Add a new publisher with:
-#      - Repository: yourusername/prompt-git
+#      - Repository: ChanChiChoi/prompt-git-manager
 #      - Workflow: publish.yml
 #      - Environment: pypi
 #   3. Or set PYPI_API_TOKEN in repository secrets
@@ -228,7 +228,7 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "Install with:" >> $GITHUB_STEP_SUMMARY
             echo '```bash' >> $GITHUB_STEP_SUMMARY
-            echo "pip install prompt-git==$VERSION" >> $GITHUB_STEP_SUMMARY
+            echo "pip install prompt-git-manager==$VERSION" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
           else
             echo "## ❌ Failed to publish v$VERSION" >> $GITHUB_STEP_SUMMARY

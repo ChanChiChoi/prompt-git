@@ -1,4 +1,4 @@
-# prompt-git MVP Spec
+# prompt-git-manager MVP Spec
 ## 目标
 零侵入、Git 原生的 Prompt 版本控制与 CI 防退化工具，专注开发时工作流，不依赖外部数据库或 Web UI。
 

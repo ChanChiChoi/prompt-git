@@ -1,4 +1,4 @@
-# prompt-git
+# prompt-git-manager
 
 <p align="center">
   <strong>Git 原生的 Prompt 版本控制与 CI 防退化工具</strong>
@@ -22,7 +22,7 @@
 
 ---
 
-## 为什么需要 prompt-git？
+## 为什么需要 prompt-git-manager？
 
 ### 问题所在
 
@@ -35,9 +35,9 @@ Prompt 工程对 AI 应用至关重要，但管理 Prompt 的方式却混乱不�
 
 ### 解决方案
 
-**prompt-git** 将软件工程最佳实践引入 Prompt 管理：
+**prompt-git-manager** 将软件工程最佳实践引入 Prompt 管理：
 
-| 功能 | 传统方式 | prompt-git |
+| 功能 | 传统方式 | prompt-git-manager |
 |------|---------|------------|
 | 版本控制 | 文档中复制粘贴 | Git 原生提交 |
 | 变更检测 | 人工审查 | 语义 Diff |
@@ -58,20 +58,20 @@ Prompt 工程对 AI 应用至关重要，但管理 Prompt 的方式却混乱不�
 ### 使用 uv（推荐）
 
 ```bash
-uv pip install prompt-git
+uv pip install prompt-git-manager
 ```
 
 ### 使用 pip
 
 ```bash
-pip install prompt-git
+pip install prompt-git-manager
 ```
 
 ### 从源码安装
 
 ```bash
-git clone https://github.com/yourusername/prompt-git.git
-cd prompt-git
+git clone https://github.com/ChanChiChoi/prompt-git-manager.git
+cd prompt-git-manager
 uv sync
 ```
 
@@ -79,7 +79,7 @@ uv sync
 
 ```bash
 pg --version
-# prompt-git 0.1.0
+# prompt-git-manager 0.1.0
 ```
 
 ---
@@ -159,7 +159,7 @@ pg eval --dataset fixtures/dataset.jsonl --threshold 0.05
 
 ### `pg init`
 
-在仓库中初始化 prompt-git。
+在仓库中初始化 prompt-git-manager。
 
 ```bash
 pg init [--dry-run]
@@ -289,8 +289,8 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: 安装 prompt-git
-        run: pip install prompt-git
+      - name: 安装 prompt-git-manager
+        run: pip install prompt-git-manager
 
       - name: 运行 diff
         run: pg diff --semantic --json > diff.json
@@ -419,7 +419,7 @@ echo "所有检查通过！"
 ## 架构
 
 ```
-prompt-git/
+prompt-git-manager/
 ├── src/promptgit/
 │   ├── __init__.py          # 版本号
 │   ├── cli.py               # Typer CLI 入口
@@ -458,8 +458,8 @@ prompt-git/
 
 ```bash
 # 克隆仓库
-git clone https://github.com/yourusername/prompt-git.git
-cd prompt-git
+git clone https://github.com/ChanChiChoi/prompt-git-manager.git
+cd prompt-git-manager
 
 # 安装开发依赖
 uv sync --extra dev
@@ -528,7 +528,7 @@ git checkout -b feature/update-qa-prompt
 # 2. 修改 prompt
 vim .prompts/qa_prompt.yaml
 
-# 3. 使用 prompt-git 提交
+# 3. 使用 prompt-git-manager 提交
 pg commit -m "提升 QA prompt 准确率"
 
 # 4. 推送分支
@@ -582,7 +582,7 @@ gh pr merge 42 --squash
 
 ### Q: 为什么不用 Langfuse/Weights & Biases？
 
-**A：** 那些是优秀的运行时监控工具。prompt-git 专注于**开发时**工作流：
+**A：** 那些是优秀的运行时监控工具。prompt-git-manager 专注于**开发时**工作流：
 - Git 原生（无需学习新工具）
 - CI 优先（部署前捕获问题）
 - 零基础设施（无需维护服务器）

@@ -1,4 +1,4 @@
-# prompt-git CLI Reference
+# prompt-git-manager CLI Reference
 
 > Git-native prompt version control & CI guardrail tool.
 
@@ -6,14 +6,14 @@
 
 ```bash
 # Using uv (recommended)
-uv pip install prompt-git
+uv pip install prompt-git-manager
 
 # Using pip
-pip install prompt-git
+pip install prompt-git-manager
 
 # From source
-git clone https://github.com/yourusername/prompt-git.git
-cd prompt-git
+git clone https://github.com/ChanChiChoi/prompt-git-manager.git
+cd prompt-git-manager
 uv sync
 ```
 
@@ -58,7 +58,7 @@ pg init --dry-run
 **Output:**
 
 ```
-✓ Initialized prompt-git in /path/to/.prompts
+✓ Initialized prompt-git-manager in /path/to/.prompts
 ┌───────────┬───────────────────────────────────┐
 │ Item      │ Path                              │
 ├───────────┼───────────────────────────────────┤

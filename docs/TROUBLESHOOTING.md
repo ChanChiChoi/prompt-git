@@ -25,16 +25,16 @@ bash: pg: command not found
 
 1. **Check if package is installed:**
    ```bash
-   pip list | grep prompt-git
+   pip list | grep prompt-git-manager
    # or
-   uv pip list | grep prompt-git
+   uv pip list | grep prompt-git-manager
    ```
 
 2. **Install the package:**
    ```bash
-   uv pip install prompt-git
+   uv pip install prompt-git-manager
    # or
-   pip install prompt-git
+   pip install prompt-git-manager
    ```
 
 3. **Check PATH:**
@@ -64,7 +64,7 @@ ModuleNotFoundError: No module named 'promptgit'
 
 1. **Install in development mode:**
    ```bash
-   cd prompt-git
+   cd prompt-git-manager
    uv sync
    ```
 
@@ -495,7 +495,7 @@ Error: Resource not accessible by integration
 
 **Symptoms:**
 ```
-Error: Failed to build `prompt-git`
+Error: Failed to build `prompt-git-manager`
 ```
 
 **Solutions:**
@@ -600,23 +600,23 @@ A: Python 3.10 and above. We recommend 3.10 or 3.11 for best compatibility.
 
 ---
 
-**Q: Can I use prompt-git with private repositories?**
+**Q: Can I use prompt-git-manager with private repositories?**
 
-A: Yes! prompt-git works entirely locally. No data is sent to external servers unless you explicitly enable LLM evaluation.
+A: Yes! prompt-git-manager works entirely locally. No data is sent to external servers unless you explicitly enable LLM evaluation.
 
 ---
 
-**Q: Does prompt-git require an internet connection?**
+**Q: Does prompt-git-manager require an internet connection?**
 
 A: No. Rule-based evaluation works completely offline. Only LLM-enhanced evaluation requires API access.
 
 ---
 
-**Q: How is prompt-git different from Langfuse?**
+**Q: How is prompt-git-manager different from Langfuse?**
 
 A: See the comparison table:
 
-| Feature | prompt-git | Langfuse |
+| Feature | prompt-git-manager | Langfuse |
 |---------|------------|----------|
 | Setup | `pip install` | Docker/Cloud |
 | Storage | Git | Database |
@@ -754,7 +754,7 @@ on:
 
 ---
 
-**Q: Can I run prompt-git in a monorepo?**
+**Q: Can I run prompt-git-manager in a monorepo?**
 
 A: Yes! Use path filters and working directory:
 
@@ -831,7 +831,7 @@ SCRIPT
 
 ---
 
-**Q: Can I use prompt-git with Jupyter notebooks?**
+**Q: Can I use prompt-git-manager with Jupyter notebooks?**
 
 A: Yes! Use the Python API:
 
@@ -852,7 +852,7 @@ print(f"Accuracy delta: {result.accuracy_delta:.1%}")
 
 ---
 
-**Q: How do I contribute to prompt-git?**
+**Q: How do I contribute to prompt-git-manager?**
 
 A: See [CONTRIBUTING.md](../CONTRIBUTING.md) for details:
 
@@ -868,10 +868,10 @@ A: See [CONTRIBUTING.md](../CONTRIBUTING.md) for details:
 
 If your issue isn't covered here:
 
-1. **Search existing issues**: [GitHub Issues](https://github.com/yourusername/prompt-git/issues)
-2. **Check discussions**: [GitHub Discussions](https://github.com/yourusername/prompt-git/discussions)
+1. **Search existing issues**: [GitHub Issues](https://github.com/ChanChiChoi/prompt-git-manager/issues)
+2. **Check discussions**: [GitHub Discussions](https://github.com/ChanChiChoi/prompt-git-manager/discussions)
 3. **Create new issue**: Include:
-   - prompt-git version (`pg --version`)
+   - prompt-git-manager version (`pg --version`)
    - Python version (`python --version`)
    - Operating system
    - Full error message
