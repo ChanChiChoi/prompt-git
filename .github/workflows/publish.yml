@@ -1,0 +1,237 @@
+# ============================================================
+# PyPI Publish Workflow
+# ============================================================
+# Features:
+#   - Triggered on GitHub Release creation
+#   - Automatic version bump from tag
+#   - Build and validate package
+#   - Upload to PyPI with trusted publishing
+#   - Upload artifacts for verification
+#
+# Setup required:
+#   1. Go to https://pypi.org/manage/account/publishing/
+#   2. Add a new publisher with:
+#      - Repository: yourusername/prompt-git
+#      - Workflow: publish.yml
+#      - Environment: pypi
+#   3. Or set PYPI_API_TOKEN in repository secrets
+
+name: "Publish to PyPI"
+
+on:
+  release:
+    types: [published]
+
+  # Manual trigger for testing
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (skip upload)'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  # ============================================================
+  # Job 1: Validate and prepare
+  # ============================================================
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          fi
+          
+          # Remove 'v' prefix if present
+          VERSION="${TAG#v}"
+          
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Detected version: $VERSION from tag: $TAG"
+
+      - name: Verify version consistency
+        run: |
+          # Check pyproject.toml version
+          PYPROJECT_VERSION=$(grep -E '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          TAG_VERSION="${{ steps.version.outputs.version }}"
+          
+          echo "pyproject.toml version: $PYPROJECT_VERSION"
+          echo "Tag version: $TAG_VERSION"
+          
+          if [ "$PYPROJECT_VERSION" != "$TAG_VERSION" ]; then
+            echo "::warning::Version mismatch! Updating pyproject.toml..."
+            sed -i "s/version = \"$PYPROJECT_VERSION\"/version = \"$TAG_VERSION\"/" pyproject.toml
+          fi
+          
+          # Check __init__.py version
+          INIT_VERSION=$(grep -E '__version__ = ' src/promptgit/__init__.py | sed 's/__version__ = "\(.*\)"/\1/')
+          
+          if [ "$INIT_VERSION" != "$TAG_VERSION" ]; then
+            echo "::warning::Version mismatch! Updating __init__.py..."
+            sed -i "s/__version__ = \"$INIT_VERSION\"/__version__ = \"$TAG_VERSION\"/" src/promptgit/__init__.py
+          fi
+
+      - name: Commit version updates
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add pyproject.toml src/promptgit/__init__.py
+          git diff --staged --quiet || git commit -m "chore: bump version to ${{ steps.version.outputs.version }}"
+          git push
+
+  # ============================================================
+  # Job 2: Build package
+  # ============================================================
+  build:
+    needs: prepare
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install build tools
+        run: pip install build twine
+
+      - name: Build package
+        run: python -m build
+
+      - name: Check package
+        run: twine check dist/*
+
+      - name: List built files
+        run: ls -la dist/
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 5
+
+  # ============================================================
+  # Job 3: Publish to Test PyPI (optional)
+  # ============================================================
+  publish-test:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    environment: testpypi
+    
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to Test PyPI
+        if: ${{ inputs.dry_run }} == 'false'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+          skip-existing: true
+
+  # ============================================================
+  # Job 4: Publish to PyPI
+  # ============================================================
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    environment: pypi
+    
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+
+  # ============================================================
+  # Job 5: Create GitHub Release with artifacts
+  # ============================================================
+  release-assets:
+    needs: publish
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/*
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ============================================================
+  # Job 6: Notify on completion
+  # ============================================================
+  notify:
+    needs: [publish, release-assets]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Create notification
+        run: |
+          STATUS="${{ needs.publish.result }}"
+          VERSION="${{ needs.prepare.outputs.version }}"
+          
+          if [ "$STATUS" = "success" ]; then
+            echo "## ✅ Published v$VERSION to PyPI" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Install with:" >> $GITHUB_STEP_SUMMARY
+            echo '```bash' >> $GITHUB_STEP_SUMMARY
+            echo "pip install prompt-git==$VERSION" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ❌ Failed to publish v$VERSION" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Check the workflow logs for details." >> $GITHUB_STEP_SUMMARY
+          fi

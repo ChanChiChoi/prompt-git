@@ -1,0 +1,195 @@
+# ============================================================
+# prompt-git 发布指南
+# ============================================================
+# 本文件记录了完整的 PyPI 发布流程，供手动操作参考。
+
+# ============================================================
+# 1. 前置配置（只需配置一次）
+# ============================================================
+
+# --- 方式 A：PyPI Trusted Publishing（推荐）---
+# 1. 访问 https://pypi.org/manage/account/tokens/ 创建 API Token
+# 2. 访问 https://github.com/yourusername/prompt-git/settings/environments
+#    创建环境 "pypi"
+# 3. 访问 https://pypi.org/manage/account/publishing/
+#    添加 publisher：
+#      - Repository: yourusername/prompt-git
+#      - Workflow: publish.yml
+#      - Environment: pypi
+
+# --- 方式 B：API Token ---
+# 1. 访问 https://pypi.org/manage/account/tokens/ 创建 API Token
+# 2. 访问 https://github.com/yourusername/prompt-git/settings/secrets/actions
+#    添加 Secret：
+#      - Name: PYPI_API_TOKEN
+#      - Value: pypi-xxxx...（你的 token）
+
+# --- Test PyPI（可选）---
+# 1. 访问 https://test.pypi.org/manage/account/tokens/ 创建 Token
+# 2. GitHub 添加 Secret: TEST_PYPI_API_TOKEN
+
+
+# ============================================================
+# 2. 版本号递增
+# ============================================================
+
+# 使用脚本自动 bump 版本
+./scripts/bump_version.sh patch   # 0.1.0 -> 0.1.1（bug 修复）
+./scripts/bump_version.sh minor   # 0.1.0 -> 0.2.0（新功能）
+./scripts/bump_version.sh major   # 0.1.0 -> 1.0.0（破坏性变更）
+
+# 脚本会自动：
+#   - 更新 pyproject.toml 中的 version
+#   - 更新 src/promptgit/__init__.py 中的 __version__
+#   - 创建 git commit
+#   - 创建 git tag（格式：v0.1.1）
+
+
+# ============================================================
+# 3. 手动发布流程（不使用 GitHub Action）
+# ============================================================
+
+# Step 1: 确保在 main 分支且代码最新
+git checkout main
+git pull origin main
+
+# Step 2: bump 版本
+./scripts/bump_version.sh patch
+
+# Step 3: 推送 commit 和 tag
+git push origin main
+git push origin v0.1.1
+
+# Step 4: 构建包
+pip install build twine
+python -m build
+
+# Step 5: 检查包
+twine check dist/*
+# 应该输出: PASSED
+
+# Step 6: 上传到 Test PyPI（先测试）
+twine upload --repository testpypi dist/*
+# 访问 https://test.pypi.org/project/prompt-git/ 确认
+
+# Step 7: 测试安装
+pip install --index-url https://test.pypi.org/simple/ prompt-git
+
+# Step 8: 上传到正式 PyPI
+twine upload dist/*
+
+# Step 9: 验证
+pip install prompt-git==0.1.1
+pg --version
+
+
+# ============================================================
+# 4. 使用 GitHub Action 自动发布
+# ============================================================
+
+# Step 1: bump 版本
+./scripts/bump_version.sh patch
+
+# Step 2: 推送
+git push origin main --tags
+
+# Step 3: 创建 GitHub Release（触发自动发布）
+gh release create v0.1.1 \
+  --title "v0.1.1" \
+  --notes "Bug fixes and improvements"
+
+# GitHub Action 会自动：
+#   - 构建 wheel 和 sdist
+#   - 验证包
+#   - 上传到 PyPI
+#   - 上传产物到 Release
+
+# 查看发布状态
+gh run list --workflow=publish.yml
+
+
+# ============================================================
+# 5. 手动触发 workflow_dispatch（测试用）
+# ============================================================
+
+# 通过 GitHub UI 手动触发
+# 访问: https://github.com/yourusername/prompt-git/actions/workflows/publish.yml
+# 点击 "Run workflow"
+# 选择 dry_run: true（测试）或 false（实际发布）
+
+# 或通过 CLI
+gh workflow run publish.yml -f dry_run=true
+
+
+# ============================================================
+# 6. 回滚发布（如果出问题）
+# ============================================================
+
+# PyPI 不允许重新上传相同版本号，需要 bump 新版本修复
+
+# Step 1: 修复问题
+# Step 2: bump patch 版本
+./scripts/bump_version.sh patch
+
+# Step 3: 重新发布
+git push origin main --tags
+gh release create v0.1.2 --title "v0.1.2" --notes "Hotfix: ..."
+
+
+# ============================================================
+# 7. 常见问题
+# ============================================================
+
+# Q: twine upload 报错 403 Forbidden
+# A: 检查 API Token 是否正确，或 Token 权限是否足够
+
+# Q: 版本号已存在
+# A: PyPI 不允许重复版本号，需要 bump 到新版本
+
+# Q: GitHub Action 未触发
+# A: 确保创建的是 Release 而不是普通的 Tag
+
+# Q: 构建失败
+# A: 检查 pyproject.toml 配置，确保所有必填字段存在
+
+# Q: 如何查看已发布的版本
+# A: 访问 https://pypi.org/project/prompt-git/#history
+
+
+# ============================================================
+# 8. 发布前检查清单
+# ============================================================
+
+# [ ] 所有测试通过：uv run pytest
+# [ ] 版本号已更新：grep version pyproject.toml
+# [ ] CHANGELOG 已更新（如果有）
+# [ ] README 已更新（如果有新功能）
+# [ ] 本地构建成功：python -m build
+# [ ] twine check 通过：twine check dist/*
+# [ ] Git 工作区干净：git status
+
+
+# ============================================================
+# 9. 快速命令参考
+# ============================================================
+
+# 构建
+python -m build
+
+# 检查
+twine check dist/*
+
+# 上传到 Test PyPI
+twine upload --repository testpypi dist/*
+
+# 上传到 PyPI
+twine upload dist/*
+
+# 创建 Release
+gh release create v0.1.1 --title "v0.1.1" --notes "Release notes"
+
+# 查看 Action 状态
+gh run list --workflow=publish.yml
+
+# 下载 Release 产物
+gh release download v0.1.1
