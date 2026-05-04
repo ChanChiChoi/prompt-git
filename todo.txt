@@ -1,0 +1,49 @@
+day1:CLI 骨架 + 解析器 + 基础 Git 操作
+你是一名资深 Python CLI 工程师。请为我生成 `prompt-git` 的 D1 核心代码。
+技术栈：Python 3.10+, typer, pydantic, gitpython, rich, pytest
+约束：
+1. 严格遵循 src/promptgit/ 目录结构，模块职责单一
+2. 使用 typer 实现 `init`, `add`, `commit` 命令，支持 -v / --dry-run
+3. 定义 Prompt Pydantic Schema：支持 system_prompt, user_template, variables(dict), constraints(list), metadata(dict)
+4. 提交时自动记录：hash、时间、变更文件列表、校验状态
+5. 输出 Rich 表格渲染结果，错误码规范（0成功，1参数错，2Git错，3校验错）
+6. 生成 tests/test_cli.py 覆盖 3 个命令正常/异常路径，使用 pytest fixtures
+7. 代码需包含 type hints、docstring、异常处理，禁止硬编码路径
+
+请分模块输出完整可运行代码，附带 pyproject.toml 依赖配置与本地运行命令。
+
+
+day2:语义 Diff 引擎 + 评测 Pipeline
+你是一名 LLM 工程化工具开发者。请为 `prompt-git` 实现 D2 核心模块：语义 Diff 与自动化评测。
+技术栈：同上，新增 difflib, jsonschema, litellm（可选）, pandas/numpy（指标计算）
+约束：
+1. diff_engine.py：
+   - 先做结构化 Diff（JSON/YAML 字段级对比）
+   - 对 system_prompt/user_template 做文本 diff，识别：变量增删、约束强化/弱化、语气/角色偏移
+   - 返回 DiffResult 数据类：added/removed/modified_fields, semantic_change_type(str), risk_level(low/med/high)
+   - 提供 --json 输出格式
+2. evaluator.py：
+   - 读取 dataset.jsonl（格式：{"input": str, "expected_output": str, "metadata": dict}）
+   - 对比新旧 Prompt 跑同一数据集，计算：accuracy_delta, token_cost_delta, consistency_score
+   - 支持 --threshold 拦截（如 accuracy 下降 >5% 返回 exit_code=2）
+3. 生成 tests/test_diff.py 与 tests/test_eval.py，各含 5 组正负用例（含多语言、含空约束、含变量冲突）
+4. 代码需可独立运行，不依赖外部 LLM API 也能跑通（默认用规则/字符串匹配，LLM 作为可选增强）
+
+请输出完整模块代码、测试用例、运行示例。附：如何用 pytest 生成覆盖率报告。
+
+
+day3:CI 集成 + Pre-commit + 文档发布
+你是一名 DevOps 与开源工程专家。请为 `prompt-git` 实现 D3 生产化模块。
+技术栈：同上，新增 jinja2, subprocess, github-action-builder（或手动 YAML 模板）
+约束：
+1. ci_gen.py：
+   - `pg ci init` 生成 `.github/workflows/prompt-guard.yml`
+   - 触发条件：PR 到 main/dev，且 `.prompts/` 有变更
+   - 步骤：checkout → setup-python → install → pg diff --semantic → pg eval --threshold 0.05 → 失败则用 actions/github-script 评论 PR
+   - 支持配置：模型 provider、阈值、数据集路径、并发数
+2. 生成 pre-commit 钩子配置，提交前自动运行 `pg diff --fail-on=high`
+3. 编写 tests/test_ci_gen.py 验证 YAML 结构正确性、参数注入逻辑
+4. 输出 README.md 完整版（含 Why/How/Install/Usage/CI-Integration/Benchmark/Contributing）
+5. 提供一键发布到 PyPI 的 GitHub Action 模板（含版本 bump、tag、upload）
+
+请输出完整代码、CI YAML 模板、README 结构。附：如何用 gh cli 快速提 PR 演示。

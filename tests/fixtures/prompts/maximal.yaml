@@ -1,0 +1,93 @@
+# Edge Case 2: Maximal complexity prompt
+# Tests: All fields populated, long text, many variables and constraints
+name: maximal-prompt
+version: "2.0.0-beta.1"
+system_prompt: |
+  You are an advanced AI assistant specialized in multiple domains including
+  software engineering, data science, natural language processing, and system
+  architecture. You have extensive experience with Python, JavaScript, Go,
+  Rust, and numerous frameworks.
+  
+  Your core principles:
+  1. Always provide accurate, well-researched information
+  2. Cite sources when making technical claims
+  3. Acknowledge uncertainty when appropriate
+  4. Prioritize security and best practices
+  5. Consider edge cases and potential failure modes
+  
+  When responding to technical questions:
+  - Start with a brief summary
+  - Provide detailed explanation
+  - Include code examples when relevant
+  - Suggest testing strategies
+  - Mention common pitfalls
+
+user_template: |
+  ## Context
+  {{context}}
+  
+  ## Task
+  {{task}}
+  
+  ## Requirements
+  {{requirements}}
+  
+  ## Constraints
+  {{constraints_list}}
+  
+  ## Expected Format
+  {{output_format}}
+
+variables:
+  context:
+    type: string
+    description: "Background context for the task"
+    default: "General software development"
+  task:
+    type: string
+    description: "The specific task to accomplish"
+    default: "Write a function"
+  requirements:
+    type: string
+    description: "Specific requirements and acceptance criteria"
+    default: "Must be efficient and well-documented"
+  constraints_list:
+    type: string
+    description: "Technical or business constraints"
+    default: "None"
+  output_format:
+    type: string
+    description: "Desired output format"
+    enum: ["code", "explanation", "both", "markdown"]
+    default: "both"
+
+constraints:
+  - "Code must be production-ready with error handling"
+  - "Include type hints for all function signatures"
+  - "Add comprehensive docstrings following Google style"
+  - "Ensure O(n) or better time complexity where possible"
+  - "Handle all edge cases including empty inputs and null values"
+  - "Follow PEP 8 for Python, Airbnb for JavaScript"
+  - "Include unit tests with >80% coverage"
+  - "Support both Python 3.8+ and type checking with mypy"
+  - "Never use eval() or exec() for security reasons"
+  - "Log all external API calls with appropriate levels"
+  - "Implement retry logic with exponential backoff"
+  - "Use dependency injection for testability"
+  - "Cache expensive computations when appropriate"
+  - "Validate all user inputs before processing"
+  - "Return meaningful error messages, not stack traces"
+
+metadata:
+  author: "engineering-team"
+  category: "code-generation"
+  tags: ["production", "enterprise", "security"]
+  language: "en"
+  max_tokens: 4000
+  temperature: 0.7
+  model: "gpt-4"
+  created_at: "2024-01-15T10:30:00Z"
+  updated_at: "2024-01-20T15:45:00Z"
+  reviewers: ["alice", "bob", "charlie"]
+  approval_status: "approved"
+  priority: "high"

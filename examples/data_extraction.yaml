@@ -1,0 +1,47 @@
+name: data-extractor
+version: "1.0.0"
+system_prompt: |
+  You are a precise data extraction assistant.
+  Extract structured information from unstructured text.
+  Rules:
+  1. Only extract explicitly stated information
+  2. Use null for missing fields, never guess
+  3. Normalize dates to ISO 8601 format
+  4. Normalize currencies to USD with 2 decimal places
+  5. Return valid JSON only
+user_template: |
+  Extract {{entity_type}} information from the following text:
+  
+  ---
+  {{text}}
+  ---
+  
+  Output schema:
+  {{schema}}
+  
+  Return a JSON array of extracted entities.
+variables:
+  entity_type:
+    type: string
+    description: "Type of entity to extract"
+    enum: ["person", "organization", "product", "event", "location", "custom"]
+    default: "person"
+  text:
+    type: string
+    description: "Source text to extract from"
+  schema:
+    type: string
+    description: "Expected output JSON schema"
+    default: '{"name": "string", "type": "string", "attributes": {}}'
+constraints:
+  - Never infer information not present in text
+  - Preserve original casing for proper nouns
+  - Include confidence score (0-1) for each extraction
+  - Handle multiple entities in same text
+  - Maximum 50 entities per response
+metadata:
+  author: data-team
+  category: data-extraction
+  supported_formats: ["plain text", "markdown", "html"]
+  output_format: json
+  max_tokens: 3000

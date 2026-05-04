@@ -1,0 +1,12 @@
+# Edge Case 1: Minimal valid prompt
+# Tests: Minimum required fields only
+name: minimal-prompt
+version: "0.1.0"
+system_prompt: "Help."
+user_template: "{{input}}"
+variables:
+  input:
+    type: string
+    default: "Hello"
+constraints: []
+metadata: {}

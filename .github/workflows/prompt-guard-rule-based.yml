@@ -1,0 +1,195 @@
+# ============================================================
+# Scenario 1: Rule-Based Only (No LLM API Required)
+# ============================================================
+# Use case: Fast, deterministic, zero-cost evaluation
+# Best for: Local development, quick feedback loops
+
+name: "Prompt Guard (Rule-Based)"
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - '.prompts/**'
+      - 'fixtures/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: prompt-guard-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVAL_THRESHOLD: 0.05
+  DATASET_PATH: fixtures/dataset.jsonl
+
+jobs:
+  prompt-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Detect changed prompt files
+        id: changes
+        run: |
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- '.prompts/*.yaml' '.prompts/*.yml')
+          echo "files<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGED_FILES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run semantic diff
+        if: steps.changes.outputs.has_changes == 'true'
+        id: diff
+        run: |
+          uv run pg diff --semantic --json > diff_report.json
+          echo "diff_completed=true" >> $GITHUB_OUTPUT
+          
+          # Extract risk level
+          RISK=$(python3 -c "
+          import json
+          with open('diff_report.json') as f:
+              data = json.load(f)
+          risks = [v.get('risk_level', 'low') for v in data.values()]
+          if 'high' in risks:
+              print('high')
+          elif 'med' in risks:
+              print('med')
+          else:
+              print('low')
+          ")
+          echo "risk_level=$RISK" >> $GITHUB_OUTPUT
+
+      - name: Run rule-based evaluation
+        if: steps.changes.outputs.has_changes == 'true'
+        id: eval
+        run: |
+          uv run pg eval \
+            --dataset ${{ env.DATASET_PATH }} \
+            --threshold ${{ env.EVAL_THRESHOLD }} \
+            --json > eval_report.json
+        continue-on-error: true
+
+      - name: Generate summary report
+        if: always() && steps.changes.outputs.has_changes == 'true'
+        run: |
+          python3 << 'SCRIPT'
+          import json
+          from datetime import datetime
+          
+          report = []
+          report.append("# Prompt Guard Report")
+          report.append(f"\n**Generated:** {datetime.now().isoformat()}")
+          report.append(f"**Type:** Rule-Based Only\n")
+          
+          # Load diff report
+          try:
+              with open('diff_report.json') as f:
+                  diff_data = json.load(f)
+              report.append("## Changes\n")
+              for file_path, diff in diff_data.items():
+                  report.append(f"- `{file_path}`: {diff.get('risk_level', 'unknown')} risk")
+          except:
+              report.append("## No diff report\n")
+          
+          # Load eval report
+          try:
+              with open('eval_report.json') as f:
+                  eval_data = json.load(f)
+              report.append("\n## Evaluation Results\n")
+              report.append(f"- Accuracy Delta: {eval_data.get('accuracy_delta', 0):.1%}")
+              report.append(f"- Consistency: {eval_data.get('consistency_score', 0):.1%}")
+              report.append(f"- Status: {'PASSED' if eval_data.get('passed', False) else 'FAILED'}")
+          except:
+              report.append("\n## No evaluation report\n")
+          
+          with open('summary_report.md', 'w') as f:
+              f.write('\n'.join(report))
+          SCRIPT
+
+      - name: Comment PR
+        if: always() && steps.changes.outputs.has_changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('summary_report.md', 'utf8');
+            
+            const evalPassed = '${{ steps.eval.outcome }}' !== 'failure';
+            const riskLevel = '${{ steps.diff.outputs.risk_level }}';
+            const statusIcon = evalPassed && riskLevel !== 'high' ? '✅' : '❌';
+            
+            const body = `${statusIcon} ${report}`;
+            
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const existing = comments.find(c => 
+              c.user.type === 'Bot' && c.body.includes('Prompt Guard Report')
+            );
+            
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body,
+              });
+            }
+
+      - name: Fail on high risk or eval failure
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          if [ "${{ steps.diff.outputs.risk_level }}" = "high" ]; then
+            echo "::error::High-risk prompt changes detected. Manual review required."
+            exit 1
+          fi
+          
+          if [ "${{ steps.eval.outcome }}" = "failure" ]; then
+            echo "::error::Prompt evaluation failed. Accuracy dropped below threshold."
+            exit 1
+          fi
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prompt-reports-rule-based
+          path: |
+            diff_report.json
+            eval_report.json
+            summary_report.md
+          retention-days: 30

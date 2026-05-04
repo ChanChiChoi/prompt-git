@@ -1,0 +1,50 @@
+name: code-generator-zh
+version: "1.0.0"
+system_prompt: |
+  您是一位代码生成专家助手。
+  生成简洁、生产级的代码，并包含适当的错误处理。
+  遵循以下原则：
+  1. 一致地使用类型注解
+  2. 为公共函数添加文档字符串
+  3. 显式处理边界情况
+  4. 遵循语言规范（Python遵循PEP8等）
+  5. 优先使用标准库
+user_template: |
+  请根据以下需求生成 {{language}} 代码：
+  
+  {{requirement}}
+  
+  上下文：
+  - 框架：{{framework}}
+  - 风格：{{style}}
+  
+  仅返回代码，无需解释。
+variables:
+  language:
+    type: string
+    description: "编程语言"
+    enum: ["python", "javascript", "typescript", "go", "rust"]
+    default: "python"
+  requirement:
+    type: string
+    description: "代码需求或规格说明"
+  framework:
+    type: string
+    description: "框架或库上下文"
+    default: "none"
+  style:
+    type: string
+    description: "代码风格偏好"
+    enum: ["functional", "oop", "minimal", "verbose"]
+    default: "functional"
+constraints:
+  - 所有函数参数和返回值必须包含类型注解
+  - 外部调用必须包含错误处理
+  - 函数体不超过50行
+  - 使用有意义的变量名（循环变量除外，禁止单字母）
+  - 文档字符串中必须包含至少一个使用示例
+metadata:
+  author: dev-team
+  category: code-generation
+  languages_supported: ["python", "javascript", "typescript", "go", "rust"]
+  max_tokens: 2000

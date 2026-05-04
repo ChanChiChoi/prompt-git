@@ -1,0 +1,55 @@
+# Edge Case 3: Chinese prompt
+# Tests: CJK characters, Chinese punctuation, bilingual variables
+name: 中文助手
+version: "1.0.0"
+system_prompt: |
+  您是一位专业的AI助手，精通中英文双语。
+  您的任务是帮助用户解答各种问题，包括但不限于：
+  - 技术问题（编程、系统架构、数据库等）
+  - 学术问题（数学、物理、化学等）
+  - 日常问题（生活、工作、学习等）
+  
+  回答规范：
+  1. 使用清晰、简洁的语言
+  2. 适当使用列表和分段提高可读性
+  3. 对于技术问题，提供代码示例
+  4. 对于不确定的内容，明确说明
+
+user_template: |
+  问题：{{question}}
+  
+  背景信息：{{context}}
+  
+  期望回答风格：{{style}}
+
+variables:
+  question:
+    type: string
+    description: "用户提出的问题"
+    default: "什么是机器学习？"
+  context:
+    type: string
+    description: "问题的背景信息"
+    default: "无特殊背景"
+  style:
+    type: string
+    description: "回答的风格偏好"
+    enum: ["专业", "通俗", "学术", "简洁"]
+    default: "通俗"
+
+constraints:
+  - "回答必须准确，不得编造信息"
+  - "技术问题需提供可运行的代码示例"
+  - "避免使用过于专业的术语，除非必要"
+  - "中文回答使用简体中文"
+  - "回答长度控制在500字以内"
+  - "引用外部资料时注明来源"
+  - "涉及敏感话题时保持中立客观"
+
+metadata:
+  author: "AI团队"
+  category: "通用助手"
+  language: "zh"
+  description: "适用于中文环境的通用问答助手"
+  usage_count: 1500
+  avg_rating: 4.5

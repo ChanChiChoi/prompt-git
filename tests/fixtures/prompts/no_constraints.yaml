@@ -1,0 +1,53 @@
+# Edge Case 5: No constraints prompt
+# Tests: Empty constraints list, focus on variables and metadata
+name: unconstrained-prompt
+version: "1.0.0"
+system_prompt: |
+  You are a creative writing assistant.
+  Help users with their creative writing projects.
+  Feel free to be imaginative and expressive.
+
+user_template: |
+  Genre: {{genre}}
+  Theme: {{theme}}
+  Tone: {{tone}}
+  Length: {{length}}
+  
+  Prompt: {{prompt}}
+
+variables:
+  genre:
+    type: string
+    description: "The literary genre"
+    enum: ["fiction", "poetry", "screenplay", "essay", "dialogue"]
+    default: "fiction"
+  theme:
+    type: string
+    description: "The central theme or topic"
+    default: "adventure"
+  tone:
+    type: string
+    description: "The emotional tone"
+    enum: ["humorous", "serious", "mysterious", "romantic", "dramatic"]
+    default: "dramatic"
+  length:
+    type: string
+    description: "Desired length"
+    enum: ["short", "medium", "long"]
+    default: "medium"
+  prompt:
+    type: string
+    description: "Specific writing prompt or starting point"
+    default: "A stranger arrives in a small town"
+
+constraints: []
+
+metadata:
+  author: "creative-team"
+  category: "writing"
+  style: "creative"
+  allow_imagination: true
+  word_count_target:
+    short: 500
+    medium: 1500
+    long: 5000

@@ -1,0 +1,299 @@
+# ============================================================
+# Scenario 2: LLM-Enhanced Evaluation
+# ============================================================
+# Use case: Higher accuracy evaluation using LLM-as-judge
+# Best for: Production releases, critical prompt changes
+# Requires: OPENAI_API_KEY or ANTHROPIC_API_KEY
+
+name: "Prompt Guard (LLM-Enhanced)"
+
+on:
+  pull_request:
+    branches: [main, release/*]
+    paths:
+      - '.prompts/**'
+      - 'fixtures/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: prompt-guard-llm-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVAL_THRESHOLD: 0.05
+  DATASET_PATH: fixtures/dataset.jsonl
+  LLM_PROVIDER: openai
+  LLM_MODEL: gpt-4o-mini
+  LLM_TEMPERATURE: 0.1
+
+jobs:
+  prompt-guard-llm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install dependencies
+        run: uv sync --extra llm
+
+      - name: Validate API key
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "::warning::OPENAI_API_KEY not set. Falling back to rule-based evaluation."
+            echo "use_llm=false" >> $GITHUB_ENV
+          else
+            echo "use_llm=true" >> $GITHUB_ENV
+          fi
+
+      - name: Run semantic diff
+        id: diff
+        run: |
+          uv run pg diff --semantic --json > diff_report.json
+          
+          # Parse risk levels
+          python3 << 'SCRIPT'
+          import json
+          
+          with open('diff_report.json') as f:
+              data = json.load(f)
+          
+          risks = []
+          for file_path, diff in data.items():
+              risk = diff.get('risk_level', 'low')
+              risks.append(risk)
+              print(f"{file_path}: {risk}")
+          
+          max_risk = 'high' if 'high' in risks else ('med' if 'med' in risks else 'low')
+          with open('$GITHUB_OUTPUT', 'a') as f:
+              f.write(f"risk_level={max_risk}\n")
+          SCRIPT
+
+      - name: Run LLM-enhanced evaluation
+        if: env.use_llm == 'true'
+        id: eval_llm
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          uv run pg eval \
+            --dataset ${{ env.DATASET_PATH }} \
+            --threshold ${{ env.EVAL_THRESHOLD }} \
+            --provider ${{ env.LLM_PROVIDER }} \
+            --model ${{ env.LLM_MODEL }} \
+            --temperature ${{ env.LLM_TEMPERATURE }} \
+            --json > eval_report_llm.json
+
+      - name: Run rule-based evaluation (fallback)
+        if: env.use_llm == 'false'
+        id: eval_rule
+        run: |
+          uv run pg eval \
+            --dataset ${{ env.DATASET_PATH }} \
+            --threshold ${{ env.EVAL_THRESHOLD }} \
+            --json > eval_report_rule.json
+
+      - name: Run consistency check
+        if: env.use_llm == 'true'
+        id: consistency
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          # Run evaluation 3 times to check consistency
+          for i in 1 2 3; do
+            uv run pg eval \
+              --dataset ${{ env.DATASET_PATH }} \
+              --threshold ${{ env.EVAL_THRESHOLD }} \
+              --provider ${{ env.LLM_PROVIDER }} \
+              --model ${{ env.LLM_MODEL }} \
+              --json > eval_run_${i}.json
+          done
+          
+          # Calculate consistency
+          python3 << 'SCRIPT'
+          import json
+          
+          results = []
+          for i in range(1, 4):
+              with open(f'eval_run_{i}.json') as f:
+                  data = json.load(f)
+                  results.append(data.get('accuracy_new', 0))
+          
+          mean = sum(results) / len(results)
+          variance = sum((x - mean) ** 2 for x in results) / len(results)
+          std_dev = variance ** 0.5
+          consistency = 1 - (std_dev / mean if mean > 0 else 0)
+          
+          with open('consistency_report.json', 'w') as f:
+              json.dump({
+                  'runs': results,
+                  'mean': mean,
+                  'std_dev': std_dev,
+                  'consistency_score': consistency,
+                  'stable': std_dev < 0.05,
+              }, f, indent=2)
+          
+          print(f"Consistency: {consistency:.2%} (std_dev: {std_dev:.4f})")
+          SCRIPT
+
+      - name: Generate LLM quality report
+        if: env.use_llm == 'true'
+        run: |
+          python3 << 'SCRIPT'
+          import json
+          from pathlib import Path
+          
+          report = []
+          report.append("# LLM-Enhanced Evaluation Report\n")
+          
+          # Load eval results
+          eval_file = 'eval_report_llm.json' if Path('eval_report_llm.json').exists() else 'eval_report_rule.json'
+          with open(eval_file) as f:
+              eval_data = json.load(f)
+          
+          report.append("## Evaluation Metrics")
+          report.append(f"- Accuracy (Old): {eval_data.get('accuracy_old', 0):.1%}")
+          report.append(f"- Accuracy (New): {eval_data.get('accuracy_new', 0):.1%}")
+          report.append(f"- Delta: {eval_data.get('accuracy_delta', 0):+.1%}")
+          report.append(f"- Token Cost Delta: {eval_data.get('token_cost_delta', 0):+.1%}")
+          
+          # Load consistency if available
+          if Path('consistency_report.json').exists():
+              with open('consistency_report.json') as f:
+                  cons_data = json.load(f)
+              report.append("\n## Consistency Analysis")
+              report.append(f"- Score: {cons_data.get('consistency_score', 0):.1%}")
+              report.append(f"- Stable: {'Yes' if cons_data.get('stable', False) else 'No'}")
+              report.append(f"- Runs: {cons_data.get('runs', [])}")
+          
+          with open('llm_report.md', 'w') as f:
+              f.write('\n'.join(report))
+          SCRIPT
+
+      - name: Comment PR with LLM analysis
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            let diffReport = '';
+            let llmReport = '';
+            let evalPassed = false;
+            
+            try {
+                diffReport = fs.readFileSync('diff_report.json', 'utf8');
+                diffReport = JSON.stringify(JSON.parse(diffReport), null, 2);
+            } catch (e) {
+                diffReport = 'No diff available';
+            }
+            
+            try {
+                const evalFile = '${{ env.use_llm }}' === 'true' ? 'eval_report_llm.json' : 'eval_report_rule.json';
+                const evalData = JSON.parse(fs.readFileSync(evalFile, 'utf8'));
+                evalPassed = evalData.passed || false;
+            } catch (e) {}
+            
+            try {
+                llmReport = fs.readFileSync('llm_report.md', 'utf8');
+            } catch (e) {
+                llmReport = '';
+            }
+            
+            const riskLevel = '${{ steps.diff.outputs.risk_level }}';
+            const statusIcon = evalPassed && riskLevel !== 'high' ? '✅' : '❌';
+            const evalType = '${{ env.use_llm }}' === 'true' ? 'LLM-Enhanced' : 'Rule-Based (fallback)';
+            
+            const body = `## ${statusIcon} Prompt Guard (${evalType})
+            
+            ${llmReport}
+            
+            <details>
+            <summary>📊 Diff Details</summary>
+            
+            \`\`\`json
+            ${diffReport}
+            \`\`\`
+            </details>
+            
+            ---
+            <sub>Evaluated with: ${{ env.LLM_MODEL || 'rule-based' }}</sub>`;
+            
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const existing = comments.find(c => 
+              c.user.type === 'Bot' && c.body.includes('Prompt Guard')
+            );
+            
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body,
+              });
+            }
+
+      - name: Check thresholds
+        run: |
+          EVAL_FILE=${{ env.use_llm == 'true' && 'eval_report_llm.json' || 'eval_report_rule.json' }}
+          
+          python3 << SCRIPT
+          import json
+          import sys
+          
+          with open('$EVAL_FILE') as f:
+              data = json.load(f)
+          
+          accuracy_delta = data.get('accuracy_delta', 0)
+          threshold = ${{ env.EVAL_THRESHOLD }}
+          
+          if accuracy_delta < -threshold:
+              print(f"::error::Accuracy dropped {abs(accuracy_delta):.1%} (threshold: {threshold:.1%})")
+              sys.exit(1)
+          
+          risk_level = '${{ steps.diff.outputs.risk_level }}'
+          if risk_level == 'high':
+              print("::error::High-risk changes require manual approval")
+              sys.exit(1)
+          
+          print("All checks passed!")
+          SCRIPT
+
+      - name: Upload all reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prompt-reports-llm
+          path: |
+            diff_report.json
+            eval_report_*.json
+            consistency_report.json
+            llm_report.md
+          retention-days: 90

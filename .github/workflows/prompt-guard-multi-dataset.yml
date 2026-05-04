@@ -1,0 +1,296 @@
+# ============================================================
+# Scenario 3: Multi-Dataset Evaluation
+# ============================================================
+# Use case: Evaluate against multiple test suites
+# Best for: Comprehensive regression testing, A/B testing
+
+name: "Prompt Guard (Multi-Dataset)"
+
+on:
+  pull_request:
+    branches: [main, develop, release/*]
+    paths:
+      - '.prompts/**'
+      - 'datasets/**'
+      - 'fixtures/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: prompt-guard-multi-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVAL_THRESHOLD: 0.05
+  CONSISTENCY_THRESHOLD: 0.8
+
+jobs:
+  prompt-guard-multi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        dataset:
+          - name: qa
+            path: fixtures/datasets/qa.jsonl
+            threshold: 0.05
+          - name: code-gen
+            path: fixtures/datasets/code_gen.jsonl
+            threshold: 0.08
+          - name: ecommerce
+            path: fixtures/datasets/ecommerce.jsonl
+            threshold: 0.03
+          - name: multilingual
+            path: fixtures/datasets/multilingual.jsonl
+            threshold: 0.10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Check if dataset exists
+        id: check_dataset
+        run: |
+          if [ -f "${{ matrix.dataset.path }}" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "count=$(wc -l < ${{ matrix.dataset.path }})" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run diff
+        if: steps.check_dataset.outputs.exists == 'true'
+        id: diff
+        run: |
+          uv run pg diff --semantic --json > diff_${{ matrix.dataset.name }}.json
+
+      - name: Run evaluation on ${{ matrix.dataset.name }}
+        if: steps.check_dataset.outputs.exists == 'true'
+        id: eval
+        run: |
+          uv run pg eval \
+            --dataset ${{ matrix.dataset.path }} \
+            --threshold ${{ matrix.dataset.threshold }} \
+            --json > eval_${{ matrix.dataset.name }}.json
+        continue-on-error: true
+
+      - name: Calculate metrics
+        if: steps.check_dataset.outputs.exists == 'true'
+        run: |
+          python3 << SCRIPT
+          import json
+          
+          dataset_name = "${{ matrix.dataset.name }}"
+          threshold = ${{ matrix.dataset.threshold }}
+          
+          # Load eval results
+          with open(f'eval_{dataset_name}.json') as f:
+              data = json.load(f)
+          
+          # Calculate additional metrics
+          details = data.get('details', [])
+          total = len(details)
+          
+          if total > 0:
+              # Category breakdown
+              categories = {}
+              for detail in details:
+                  meta = detail.get('metadata', {})
+                  cat = meta.get('category', 'unknown')
+                  if cat not in categories:
+                      categories[cat] = {'total': 0, 'passed': 0}
+                  categories[cat]['total'] += 1
+                  if detail.get('new_match', False):
+                      categories[cat]['passed'] += 1
+              
+              # Generate category report
+              report = {
+                  'dataset': dataset_name,
+                  'threshold': threshold,
+                  'overall': {
+                      'accuracy_delta': data.get('accuracy_delta', 0),
+                      'passed': data.get('passed', False),
+                  },
+                  'categories': {}
+              }
+              
+              for cat, stats in categories.items():
+                  accuracy = stats['passed'] / stats['total'] if stats['total'] > 0 else 0
+                  report['categories'][cat] = {
+                      'total': stats['total'],
+                      'passed': stats['passed'],
+                      'accuracy': accuracy,
+                  }
+              
+              with open(f'report_{dataset_name}.json', 'w') as f:
+                  json.dump(report, f, indent=2)
+          SCRIPT
+
+      - name: Upload results
+        if: always() && steps.check_dataset.outputs.exists == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-${{ matrix.dataset.name }}
+          path: |
+            eval_${{ matrix.dataset.name }}.json
+            report_${{ matrix.dataset.name }}.json
+            diff_${{ matrix.dataset.name }}.json
+          retention-days: 30
+
+  aggregate-results:
+    needs: prompt-guard-multi
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-results/
+
+      - name: Aggregate results
+        run: |
+          python3 << 'SCRIPT'
+          import json
+          import os
+          from pathlib import Path
+          
+          all_results = {}
+          overall_passed = True
+          
+          # Process each dataset result
+          for artifact_dir in Path('all-results').iterdir():
+              if artifact_dir.is_dir():
+                  for json_file in artifact_dir.glob('report_*.json'):
+                      with open(json_file) as f:
+                          data = json.load(f)
+                          dataset_name = data.get('dataset', 'unknown')
+                          all_results[dataset_name] = data
+                          
+                          if not data.get('overall', {}).get('passed', False):
+                              overall_passed = False
+          
+          # Generate final report
+          report = []
+          report.append("# Multi-Dataset Evaluation Report\n")
+          report.append(f"**Overall Status:** {'PASSED' if overall_passed else 'FAILED'}\n")
+          report.append("## Results by Dataset\n")
+          report.append("| Dataset | Accuracy Delta | Status | Threshold |")
+          report.append("|---------|---------------|--------|-----------|")
+          
+          for name, data in sorted(all_results.items()):
+              overall = data.get('overall', {})
+              delta = overall.get('accuracy_delta', 0)
+              passed = overall.get('passed', False)
+              threshold = data.get('threshold', 0.05)
+              status = "✅ PASS" if passed else "❌ FAIL"
+              report.append(f"| {name} | {delta:+.1%} | {status} | {threshold:.1%} |")
+          
+          # Category breakdown
+          report.append("\n## Category Breakdown\n")
+          for name, data in sorted(all_results.items()):
+              categories = data.get('categories', {})
+              if categories:
+                  report.append(f"\n### {name}")
+                  report.append("| Category | Accuracy | Samples |")
+                  report.append("|----------|----------|---------|")
+                  for cat, stats in sorted(categories.items()):
+                      report.append(f"| {cat} | {stats['accuracy']:.1%} | {stats['total']} |")
+          
+          final_report = '\n'.join(report)
+          with open('multi_dataset_report.md', 'w') as f:
+              f.write(final_report)
+          
+          # Save JSON summary
+          summary = {
+              'overall_passed': overall_passed,
+              'datasets': all_results,
+          }
+          with open('multi_dataset_summary.json', 'w') as f:
+              json.dump(summary, f, indent=2)
+          
+          print(final_report)
+          
+          if not overall_passed:
+              print("\n::error::One or more datasets failed evaluation")
+              exit(1)
+          SCRIPT
+
+      - name: Comment PR with aggregated results
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            let report = '';
+            let passed = false;
+            
+            try {
+                report = fs.readFileSync('multi_dataset_report.md', 'utf8');
+                const summary = JSON.parse(fs.readFileSync('multi_dataset_summary.json', 'utf8'));
+                passed = summary.overall_passed;
+            } catch (e) {
+                report = 'Failed to generate report';
+            }
+            
+            const statusIcon = passed ? '✅' : '❌';
+            const body = `## ${statusIcon} Multi-Dataset Evaluation
+            
+            ${report}
+            
+            ---
+            <sub>Evaluated ${Object.keys(JSON.parse(fs.readFileSync('multi_dataset_summary.json', 'utf8')).datasets || {}).length} datasets</sub>`;
+            
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const existing = comments.find(c => 
+              c.user.type === 'Bot' && c.body.includes('Multi-Dataset Evaluation')
+            );
+            
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body,
+              });
+            }
+
+      - name: Upload final report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: multi-dataset-final-report
+          path: |
+            multi_dataset_report.md
+            multi_dataset_summary.json
+          retention-days: 90

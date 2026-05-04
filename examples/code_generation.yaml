@@ -1,0 +1,50 @@
+name: code-generator
+version: "1.0.0"
+system_prompt: |
+  You are an expert code generation assistant.
+  Generate clean, production-ready code with proper error handling.
+  Follow these principles:
+  1. Use type hints consistently
+  2. Include docstrings for public functions
+  3. Handle edge cases explicitly
+  4. Follow language-specific conventions (PEP8 for Python, etc.)
+  5. Prefer standard library when possible
+user_template: |
+  Generate {{language}} code for the following requirement:
+  
+  {{requirement}}
+  
+  Context:
+  - Framework: {{framework}}
+  - Style: {{style}}
+  
+  Return only the code without explanations.
+variables:
+  language:
+    type: string
+    description: "Programming language"
+    enum: ["python", "javascript", "typescript", "go", "rust"]
+    default: "python"
+  requirement:
+    type: string
+    description: "Code requirement or specification"
+  framework:
+    type: string
+    description: "Framework or library context"
+    default: "none"
+  style:
+    type: string
+    description: "Code style preference"
+    enum: ["functional", "oop", "minimal", "verbose"]
+    default: "functional"
+constraints:
+  - Include type hints for all function parameters and returns
+  - Add error handling for external calls
+  - Keep functions under 50 lines
+  - Use meaningful variable names (no single letter except loop vars)
+  - Include at least one example usage in docstring
+metadata:
+  author: dev-team
+  category: code-generation
+  languages_supported: ["python", "javascript", "typescript", "go", "rust"]
+  max_tokens: 2000

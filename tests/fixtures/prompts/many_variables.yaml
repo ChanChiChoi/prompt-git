@@ -1,0 +1,150 @@
+# Edge Case 4: Many variables prompt
+# Tests: Variable extraction, template rendering with many placeholders
+name: many-variables-prompt
+version: "1.0.0"
+system_prompt: "Generate a detailed report based on the provided parameters."
+user_template: |
+  Report for {{company_name}} ({{industry}} sector)
+  
+  Date: {{report_date}}
+  Author: {{author_name}}
+  Department: {{department}}
+  
+  Executive Summary:
+  {{executive_summary}}
+  
+  Key Metrics:
+  - Revenue: {{revenue}} {{currency}}
+  - Growth: {{growth_rate}}%
+  - Market Share: {{market_share}}%
+  - Customer Count: {{customer_count}}
+  - Employee Count: {{employee_count}}
+  
+  Regional Performance:
+  - North America: {{na_performance}}
+  - Europe: {{eu_performance}}
+  - Asia Pacific: {{apac_performance}}
+  - Latin America: {{latam_performance}}
+  
+  Product Lines:
+  - Product A: {{product_a_status}}
+  - Product B: {{product_b_status}}
+  - Product C: {{product_c_status}}
+  
+  Strategic Initiatives:
+  {{initiative_1}}
+  {{initiative_2}}
+  {{initiative_3}}
+  
+  Risks and Challenges:
+  {{risk_1}}
+  {{risk_2}}
+  {{risk_3}}
+  
+  Recommendations:
+  {{recommendation_1}}
+  {{recommendation_2}}
+  {{recommendation_3}}
+  
+  Appendix:
+  {{appendix_content}}
+
+variables:
+  company_name:
+    type: string
+    default: "Acme Corp"
+  industry:
+    type: string
+    default: "Technology"
+  report_date:
+    type: string
+    default: "2024-01-15"
+  author_name:
+    type: string
+    default: "John Doe"
+  department:
+    type: string
+    default: "Finance"
+  executive_summary:
+    type: string
+    default: "Strong performance across all metrics."
+  revenue:
+    type: string
+    default: "1,000,000"
+  currency:
+    type: string
+    default: "USD"
+  growth_rate:
+    type: string
+    default: "15"
+  market_share:
+    type: string
+    default: "25"
+  customer_count:
+    type: string
+    default: "50,000"
+  employee_count:
+    type: string
+    default: "500"
+  na_performance:
+    type: string
+    default: "Strong"
+  eu_performance:
+    type: string
+    default: "Moderate"
+  apac_performance:
+    type: string
+    default: "High Growth"
+  latam_performance:
+    type: string
+    default: "Emerging"
+  product_a_status:
+    type: string
+    default: "Leading"
+  product_b_status:
+    type: string
+    default: "Growing"
+  product_c_status:
+    type: string
+    default: "New Launch"
+  initiative_1:
+    type: string
+    default: "Digital transformation"
+  initiative_2:
+    type: string
+    default: "Market expansion"
+  initiative_3:
+    type: string
+    default: "Talent acquisition"
+  risk_1:
+    type: string
+    default: "Market volatility"
+  risk_2:
+    type: string
+    default: "Regulatory changes"
+  risk_3:
+    type: string
+    default: "Competition"
+  recommendation_1:
+    type: string
+    default: "Invest in R&D"
+  recommendation_2:
+    type: string
+    default: "Expand APAC presence"
+  recommendation_3:
+    type: string
+    default: "Enhance customer experience"
+  appendix_content:
+    type: string
+    default: "Detailed financial statements available upon request."
+
+constraints:
+  - "Use professional business language"
+  - "Include all provided metrics"
+  - "Maintain consistent formatting"
+  - "No speculative statements"
+
+metadata:
+  author: "report-generator"
+  category: "business"
+  template_type: "quarterly-report"
