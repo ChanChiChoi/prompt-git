@@ -96,18 +96,169 @@
 }
 ```
 
-### messages 字段说明
+### 模板级 messages vs 样本级 messages
 
-`messages` 用于为每个样本提供独立的对话历史上下文：
+评估时，LLM 收到的消息由 **模板** 和 **数据集样本** 共同决定。理解两者的区别是正确使用多轮评估的关键。
 
-- **格式**：`[{"role": "user"|"assistant"|"system", "content": "..."}]`
-- **优先级**：样本级 `messages` 覆盖模板级 `messages`
-- **用途**：每个样本有不同的对话背景时使用
+#### 什么是模板级 messages？
 
-**消息来源优先级：**
-1. 样本级 `messages`（数据集 JSONL 中）— 优先使用
-2. 模板级 `messages`（YAML 模板中）— 样本无 messages 时的默认值
-3. 无 messages — 单轮模式
+定义在 YAML 模板文件中的 `messages` 字段，所有样本共享同一份对话结构：
+
+```yaml
+# .prompts/tutor.yaml
+name: python-tutor
+system_prompt: "You are a Python tutor."
+messages:                          # ← 这就是「模板级 messages」
+  - role: user
+    content: "I want to learn {{topic}}"
+  - role: assistant
+    content: "Great! {{topic}} is a great topic."
+user_template: "{{current_question}}"
+variables:
+  topic:
+    default: "Python"
+  current_question:
+    default: "Can you show me an example?"
+```
+
+特点：所有样本使用相同的对话框架，通过 `{{topic}}` 等变量适配不同主题。
+
+#### 什么是样本级 messages？
+
+定义在数据集 JSONL 每个样本中的 `messages` 字段，每个样本有自己独立的对话历史：
+
+```jsonl
+{"input": "Show me filtering", "expected_output": "[x for x in range(10) if x % 2 == 0]", "messages": [{"role": "user", "content": "I want to learn list comprehensions"}, {"role": "assistant", "content": "Let's start with basics."}]}
+{"input": "How about sorting?", "expected_output": "Use sorted() function", "messages": [{"role": "user", "content": "Tell me about sorting"}, {"role": "assistant", "content": "Python has great sorting tools."}]}
+```
+
+特点：每个样本的对话历史完全不同，适用于每个样本需要不同对话背景的场景。
+
+#### 三种组合场景
+
+**场景 A：模板有 messages + 样本有 messages（样本覆盖模板）**
+
+模板和样本都定义了 messages 时，使用样本的，忽略模板的。
+
+模板 `tutor.yaml`：
+```yaml
+system_prompt: "You are a Python tutor."
+messages:
+  - role: user
+    content: "I want to learn {{topic}}"
+  - role: assistant
+    content: "{{topic}} is great."
+user_template: "{{current_question}}"
+```
+
+数据集：
+```jsonl
+{"input": "Show me filtering", "expected_output": "...", "messages": [{"role": "user", "content": "I want to learn list comprehensions"}, {"role": "assistant", "content": "Here's the syntax: [expr for item in iterable]."}, {"role": "user", "content": "Can I add conditions?"}, {"role": "assistant", "content": "Yes, use if clause: [x for x in items if cond]."}]}
+```
+
+最终 LLM 收到的消息：
+```
+system: You are a Python tutor.
+user: I want to learn list comprehensions           ← 来自样本
+assistant: Here's the syntax: [expr for item in iterable].  ← 来自样本
+user: Can I add conditions?                          ← 来自样本
+assistant: Yes, use if clause: [x for x in items if cond].  ← 来自样本
+user: Show me filtering                              ← 来自 input
+```
+
+模板的 messages（`I want to learn {{topic}}`、`{{topic}} is great.`）被完全忽略。
+
+---
+
+**场景 B：模板有 messages + 样本无 messages（使用模板默认）**
+
+样本没有定义 messages 时，使用模板的 messages 作为默认对话历史。
+
+模板 `tutor.yaml`：
+```yaml
+system_prompt: "You are a Python tutor."
+messages:
+  - role: user
+    content: "I want to learn {{topic}}"
+  - role: assistant
+    content: "{{topic}} is great."
+user_template: "{{current_question}}"
+```
+
+数据集：
+```jsonl
+{"input": "Show me an example", "expected_output": "...", "metadata": {"topic": "loops"}}
+{"input": "How about functions?", "expected_output": "...", "metadata": {"topic": "functions"}}
+```
+
+样本 1 最终 LLM 收到的消息：
+```
+system: You are a Python tutor.
+user: I want to learn loops                           ← 来自模板，{{topic}} 被替换
+assistant: loops is great.                            ← 来自模板，{{topic}} 被替换
+user: Show me an example                              ← 来自 input
+```
+
+适用于：所有样本共享相同的对话结构，只需要通过变量切换主题。
+
+---
+
+**场景 C：模板无 messages + 样本有 messages（仅用样本历史）**
+
+模板是单轮的，但样本自带对话历史。
+
+模板 `simple.yaml`：
+```yaml
+system_prompt: "You are a Python tutor."
+user_template: "{{question}}"
+```
+
+数据集：
+```jsonl
+{"input": "Show me filtering", "expected_output": "...", "messages": [{"role": "user", "content": "I want to learn list comprehensions"}, {"role": "assistant", "content": "Let's start with basics."}]}
+{"input": "What is Python?", "expected_output": "..."}
+```
+
+样本 1 最终 LLM 收到的消息：
+```
+system: You are a Python tutor.
+user: I want to learn list comprehensions           ← 来自样本
+assistant: Let's start with basics.                  ← 来自样本
+user: Show me filtering                              ← 来自 input
+```
+
+样本 2 最终 LLM 收到的消息（单轮，无历史）：
+```
+system: You are a Python tutor.
+user: What is Python?                                ← 来自 input
+```
+
+适用于：部分样本需要多轮上下文，部分不需要，灵活混合。
+
+---
+
+#### 优先级总结
+
+| 模板 messages | 样本 messages | 最终使用 | 说明 |
+|:---:|:---:|:---:|------|
+| 有 | 有 | **样本的** | 样本覆盖模板 |
+| 有 | 无 | **模板的** | 使用模板默认历史 |
+| 无 | 有 | **样本的** | 样本提供历史 |
+| 无 | 无 | **无** | 单轮模式 |
+
+#### 格式要求
+
+```json
+"messages": [
+  {"role": "user",      "content": "用户说的话"},
+  {"role": "assistant", "content": "助手的回复"},
+  {"role": "system",    "content": "额外的系统指令（可选）"}
+]
+```
+
+- `role`：必须是 `user`、`assistant`、`system` 之一
+- `content`：非空字符串
+- 消息按数组顺序排列，代表对话的时间顺序
 
 ### Metadata 推荐字段
 
