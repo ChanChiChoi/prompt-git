@@ -479,6 +479,10 @@ def evaluate_prompts(
         # Get per-sample messages (empty list means no override)
         sample_msgs = sample.messages if sample.messages else None
 
+        # Inject sample_messages into variables so custom render_fn can access it
+        if sample_msgs:
+            variables["_sample_messages"] = sample_msgs
+
         # Render prompts
         if render_fn is not None:
             old_rendered = render_fn(old_template, variables)

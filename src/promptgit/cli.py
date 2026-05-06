@@ -510,7 +510,11 @@ def eval(
     if provider is None:
         env_provider = os.environ.get("PROMPT_GIT_MODEL")
         if env_provider and env_provider != "none":
-            provider = env_provider
+            # Support "provider:model" format (same as --compare-models)
+            if ":" in env_provider and model is None:
+                provider, model = env_provider.split(":", 1)
+            else:
+                provider = env_provider
 
     repo = get_repo()
     prompts_dir = get_prompts_dir(repo)

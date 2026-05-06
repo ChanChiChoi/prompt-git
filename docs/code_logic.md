@@ -804,30 +804,22 @@ def ci_init(config: Optional[Path] = None)
 
 > 以下为对照代码逻辑与各文档后发现的不一致之处。
 
-### 1. 环境变量文档与代码不一致
+### 1. ~~环境变量文档与代码不一致~~ ✅ 已修复
 
-**问题：** `PROMPT_GIT_MODEL`、`PROMPT_GIT_THRESHOLD`、`PROMPT_GIT_EDITOR` 在文档中列出，但**代码中从未使用**。
+`PROMPT_GIT_MODEL` 和 `PROMPT_GIT_THRESHOLD` 已在 `cli.py` 中实现：
 
-- `cli_reference.md` 第 433-438 行列出了这三个变量
-- `configuration.md` 第 82-83 行列出了 `PROMPT_GIT_MODEL` 和 `PROMPT_GIT_THRESHOLD`
-- `src/promptgit/cli.py` 中 **没有** 读取这些环境变量的代码
-- 阈值和模型均通过 CLI 参数或 `config.json` 设置
+- `PROMPT_GIT_THRESHOLD`：设置评估阈值默认值（cli.py:506-508）
+- `PROMPT_GIT_MODEL`：设置 LLM 提供商和模型，支持两种格式（cli.py:510-517）：
+  - `provider` 格式（如 `openai`）：仅设置 provider
+  - `provider:model` 格式（如 `openai:gpt-4`）：同时设置 provider 和 model，直接启用 LLM 评估模式
 
-**影响：** 用户按文档设置这些环境变量不会生效。
+### 2. ~~Azure OpenAI 未实现~~ ✅ 已修复
 
-**建议：** 要么在 cli.py 中实现读取这些环境变量的逻辑，要么从文档中移除。
+`llm_evaluator.py` 已支持 Azure：
 
-### 2. Azure OpenAI 未实现
-
-**问题：** `configuration.md` 第 367 行声称支持 `azure` 提供商并使用 `AZURE_API_KEY`，但：
-
-- `llm_evaluator.py` 的 `get_llm_config()` 中 `env_keys` 映射**没有** `azure` 条目
-- `to_litellm_model()` 的 `provider_prefixes` 中**没有** `azure` 条目
-- 虽然 LiteLLM 本身支持 Azure，但 prompt-git-manager 的配置层未适配
-
-**影响：** 按文档使用 `--provider azure` 会走默认路径，可能无法正确连接。
-
-**建议：** 要么在 `llm_evaluator.py` 中添加 Azure 支持（添加 env_key 和 prefix），要么从文档中移除 Azure 条目。
+- `env_keys` 映射包含 `"azure": "AZURE_API_KEY"`（llm_evaluator.py:164）
+- `provider_prefixes` 包含 `"azure": "azure/"`（llm_evaluator.py:46）
+- 使用 `--provider azure --model <deployment>` 即可连接 Azure OpenAI
 
 ### 3. 本地模型 API Key 环境变量未文档化
 
@@ -843,16 +835,9 @@ def ci_init(config: Optional[Path] = None)
 
 **建议：** 在 configuration.md 环境变量表中补充这三个变量，并说明本地模型通常不需要。
 
-### 4. CLI `--api-base` 参数在代码中缺失
+### 4. ~~CLI `--api-base` 参数在代码中缺失~~ ✅ 已修复
 
-**问题：**
-- `cli_reference.md` 第 278 行文档化了 `--api-base` 参数
-- `configuration.md` 第 293 行有使用示例
-- 但 `cli.py` 的 `eval` 命令函数签名中**没有** `api_base` 参数
-
-**影响：** 用户使用 `--api-base` 会报 "unexpected option" 错误。
-
-**建议：** 在 `cli.py` 的 `eval` 命令中添加 `api_base` 参数，并传递给 `get_llm_config()`。
+`--api-base` 参数已在 `cli.py` 的 `eval` 命令中实现（cli.py:470-472），并传递给 `get_llm_config()`。
 
 ### 5. 评估分数标准不一致
 

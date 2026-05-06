@@ -659,3 +659,119 @@ class TestMultiTurnLLM:
         assert first_call.kwargs.get("messages") is not None or \
                (len(first_call.args) > 3 and first_call.args[3] is not None) or \
                first_call.kwargs.get("messages") is not None
+
+
+class TestSampleMessagesScenariosLLM:
+    """Tests for sample_messages scenarios in LLM evaluator."""
+
+    def _make_template_with_messages(self):
+        return PromptTemplate.model_validate({
+            "name": "mt", "version": "1.0.0",
+            "system_prompt": "You are a tutor.",
+            "user_template": "{{question}}",
+            "variables": {"topic": {"default": "Python"}, "question": {"default": "Go on."}},
+            "constraints": [], "metadata": {},
+            "messages": [
+                {"role": "user", "content": "I want to learn {{topic}}"},
+                {"role": "assistant", "content": "{{topic}} is great."},
+            ],
+        })
+
+    def _make_template_without_messages(self):
+        return PromptTemplate.model_validate({
+            "name": "st", "version": "1.0.0",
+            "system_prompt": "You are a tutor.",
+            "user_template": "{{question}}",
+            "variables": {"question": {"default": "Go on."}},
+            "constraints": [], "metadata": {},
+        })
+
+    def test_build_messages_scenario_a_sample_overrides(self):
+        """Scenario A: _build_messages uses sample_messages over template."""
+        from promptgit.llm_evaluator import _build_messages
+        template = self._make_template_with_messages()
+        sample_msgs = [
+            {"role": "user", "content": "Tell me about loops"},
+            {"role": "assistant", "content": "Loops repeat code."},
+        ]
+        messages = _build_messages(template, {"question": "Go on."}, sample_messages=sample_msgs)
+
+        assert messages is not None
+        contents = [m["content"] for m in messages]
+        assert any("Tell me about loops" in c for c in contents)
+        assert any("Loops repeat code." in c for c in contents)
+        # Template messages should NOT appear
+        assert not any("I want to learn" in c for c in contents)
+
+    def test_build_messages_scenario_b_template_default(self):
+        """Scenario B: _build_messages uses template messages when no sample."""
+        from promptgit.llm_evaluator import _build_messages
+        template = self._make_template_with_messages()
+        messages = _build_messages(template, {"question": "Go on."})
+
+        assert messages is not None
+        contents = [m["content"] for m in messages]
+        assert any("I want to learn Python" in c for c in contents)
+        assert any("Python is great." in c for c in contents)
+
+    def test_build_messages_scenario_c_sample_only(self):
+        """Scenario C: _build_messages uses sample messages with single-turn template."""
+        from promptgit.llm_evaluator import _build_messages
+        template = self._make_template_without_messages()
+        sample_msgs = [
+            {"role": "user", "content": "I want to learn loops"},
+            {"role": "assistant", "content": "Loops repeat code."},
+        ]
+        messages = _build_messages(template, {"question": "Go on."}, sample_messages=sample_msgs)
+
+        assert messages is not None
+        contents = [m["content"] for m in messages]
+        assert any("I want to learn loops" in c for c in contents)
+        assert any("Loops repeat code." in c for c in contents)
+
+    def test_build_messages_no_messages_returns_none(self):
+        """No template messages + no sample messages → None."""
+        from promptgit.llm_evaluator import _build_messages
+        template = self._make_template_without_messages()
+        messages = _build_messages(template, {"question": "Go on."})
+        assert messages is None
+
+    @patch("promptgit.llm_evaluator.call_llm")
+    def test_evaluate_with_llm_sample_overrides_template(self, mock_call_llm):
+        """Scenario A: evaluate_prompts_with_llm uses sample messages."""
+        mock_call_llm.return_value = "Response text"
+        template = self._make_template_with_messages()
+        dataset = [
+            EvalSample(
+                input="Show me", expected_output="Response",
+                messages=[
+                    {"role": "user", "content": "Sample history"},
+                    {"role": "assistant", "content": "Sample reply"},
+                ],
+            ),
+        ]
+        config = LLMConfig(provider="openai", model="gpt-4")
+        result = evaluate_prompts_with_llm(template, template, dataset, config)
+
+        assert result.total_samples == 1
+        # Verify the messages passed to call_llm contain sample history
+        first_call = mock_call_llm.call_args_list[0]
+        msgs = first_call.kwargs.get("messages", first_call.args[3] if len(first_call.args) > 3 else None)
+        assert msgs is not None
+        contents = [m["content"] for m in msgs]
+        assert any("Sample history" in c for c in contents)
+        assert not any("I want to learn" in c for c in contents)
+
+    @patch("promptgit.llm_evaluator.call_llm")
+    def test_evaluate_with_llm_mixed_samples(self, mock_call_llm):
+        """evaluate_prompts_with_llm handles mixed samples."""
+        mock_call_llm.return_value = "Response"
+        template = self._make_template_with_messages()
+        dataset = [
+            EvalSample(input="Q1", expected_output="A1",
+                       messages=[{"role": "user", "content": "history"}, {"role": "assistant", "content": "reply"}]),
+            EvalSample(input="Q2", expected_output="A2"),  # no messages
+        ]
+        config = LLMConfig(provider="openai", model="gpt-4")
+        result = evaluate_prompts_with_llm(template, template, dataset, config)
+        assert result.total_samples == 2

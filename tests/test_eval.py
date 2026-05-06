@@ -525,3 +525,116 @@ class TestMultiTurnRender:
         }
         with pytest.raises(Exception):
             PromptTemplate.model_validate(data)
+
+
+class TestSampleMessagesScenarios:
+    """Tests for the three sample_messages scenarios."""
+
+    def _make_template_with_messages(self):
+        """Template with messages."""
+        return PromptTemplate.model_validate({
+            "name": "with-msgs",
+            "version": "1.0.0",
+            "system_prompt": "You are a tutor.",
+            "user_template": "{{question}}",
+            "variables": {"topic": {"default": "Python"}, "question": {"default": "Go on."}},
+            "constraints": [],
+            "metadata": {},
+            "messages": [
+                {"role": "user", "content": "I want to learn {{topic}}"},
+                {"role": "assistant", "content": "{{topic}} is great."},
+            ],
+        })
+
+    def _make_template_without_messages(self):
+        """Template without messages (single-turn)."""
+        return PromptTemplate.model_validate({
+            "name": "no-msgs",
+            "version": "1.0.0",
+            "system_prompt": "You are a tutor.",
+            "user_template": "{{question}}",
+            "variables": {"question": {"default": "Go on."}},
+            "constraints": [],
+            "metadata": {},
+        })
+
+    def test_scenario_a_sample_overrides_template(self):
+        """Scenario A: template has messages + sample has messages → sample wins."""
+        template = self._make_template_with_messages()
+        sample_msgs = [
+            {"role": "user", "content": "Tell me about loops"},
+            {"role": "assistant", "content": "Loops repeat code."},
+        ]
+        rendered = rule_based_render(template, {"question": "Show me for loop"}, sample_messages=sample_msgs)
+
+        # Sample messages should appear, not template messages
+        assert "Tell me about loops" in rendered
+        assert "Loops repeat code." in rendered
+        # Template messages should NOT appear
+        assert "I want to learn" not in rendered
+        assert "is great." not in rendered
+
+    def test_scenario_b_template_as_default(self):
+        """Scenario B: template has messages + sample has no messages → template wins."""
+        template = self._make_template_with_messages()
+        # No sample_messages passed (None)
+        rendered = rule_based_render(template, {"question": "Show me an example"})
+
+        # Template messages should appear with variables substituted
+        assert "I want to learn Python" in rendered
+        assert "Python is great." in rendered
+
+    def test_scenario_c_sample_only(self):
+        """Scenario C: template has no messages + sample has messages → sample provides history."""
+        template = self._make_template_without_messages()
+        sample_msgs = [
+            {"role": "user", "content": "I want to learn loops"},
+            {"role": "assistant", "content": "Loops repeat code."},
+        ]
+        rendered = rule_based_render(template, {"question": "Show me for loop"}, sample_messages=sample_msgs)
+
+        # Sample messages should appear
+        assert "[system]" in rendered
+        assert "I want to learn loops" in rendered
+        assert "Loops repeat code." in rendered
+        assert "Show me for loop" in rendered
+
+    def test_scenario_c_no_messages_single_turn(self):
+        """Scenario C variant: no template messages + no sample messages → single-turn."""
+        template = self._make_template_without_messages()
+        rendered = rule_based_render(template, {"question": "Hello"})
+
+        # Should be single-turn format
+        assert "[system]" not in rendered
+        assert rendered == "You are a tutor.\n\nHello"
+
+    def test_evaluate_prompts_with_sample_messages(self):
+        """evaluate_prompts correctly uses sample_messages."""
+        template = self._make_template_with_messages()
+        dataset = [
+            EvalSample(
+                input="Show me filtering",
+                expected_output="list comprehension filter",
+                messages=[
+                    {"role": "user", "content": "I want to learn list comprehensions"},
+                    {"role": "assistant", "content": "Here's the syntax."},
+                ],
+            ),
+        ]
+        result = evaluate_prompts(template, template, dataset)
+        assert result.total_samples == 1
+        assert isinstance(result.passed, bool)
+
+    def test_evaluate_prompts_mixed_samples(self):
+        """evaluate_prompts handles mix of samples with and without messages."""
+        template = self._make_template_with_messages()
+        dataset = [
+            EvalSample(
+                input="Q1",
+                expected_output="A1",
+                messages=[{"role": "user", "content": "history"}, {"role": "assistant", "content": "reply"}],
+            ),
+            EvalSample(input="Q2", expected_output="A2"),  # no messages
+        ]
+        result = evaluate_prompts(template, template, dataset)
+        assert result.total_samples == 2

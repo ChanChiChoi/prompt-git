@@ -340,8 +340,18 @@ def _build_messages(
     if not messages:
         return None
 
+    # Merge default variables with provided ones (same as rule_based_render)
+    merged_vars: dict[str, Any] = {}
+    for var_name, var_def in template.variables.items():
+        if isinstance(var_def, dict):
+            default = var_def.get("default", "")
+        else:
+            default = str(var_def)
+        merged_vars[var_name] = default
+    merged_vars.update(variables)
+
     def _substitute(text: str) -> str:
-        for var_name, var_value in variables.items():
+        for var_name, var_value in merged_vars.items():
             text = text.replace(f"{{{{{var_name}}}}}", str(var_value))
         return text
 
@@ -401,8 +411,8 @@ def evaluate_prompts_with_llm(
         new_messages = _build_messages(new_template, variables, sample_messages=sample_msgs)
 
         # Render prompts (for judge and similarity comparison)
-        old_rendered = rule_based_render(old_template, variables)
-        new_rendered = rule_based_render(new_template, variables)
+        old_rendered = rule_based_render(old_template, variables, sample_messages=sample_msgs)
+        new_rendered = rule_based_render(new_template, variables, sample_messages=sample_msgs)
 
         # Generate outputs using LLM
         old_output, old_tokens = llm_generate_output(
