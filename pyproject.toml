@@ -1,6 +1,6 @@
 [project]
 name = "prompt-git-manager"
-version = "0.2.0"
+version = "0.2.1"
 description = "Git-native prompt version control & CI guardrail tool"
 readme = "README.md"
 license = "MIT"
