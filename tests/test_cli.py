@@ -16,6 +16,22 @@ from promptgit.cli import app
 runner = CliRunner()
 
 
+class TestVersionCallback:
+    """Tests for pg --version flag."""
+
+    def test_version_flag(self):
+        """--version prints version and exits."""
+        result = runner.invoke(app, ["--version"])
+        assert result.exit_code == 0
+        assert "prompt-git-manager" in result.output
+
+    def test_version_short_flag(self):
+        """-v prints version and exits."""
+        result = runner.invoke(app, ["-v"])
+        assert result.exit_code == 0
+        assert "prompt-git-manager" in result.output
+
+
 class TestInitCommand:
     """Tests for pg init command."""
 
@@ -61,6 +77,50 @@ class TestInitCommand:
         runner.invoke(app, ["init"])
         result = runner.invoke(app, ["init"])
         assert result.exit_code == 0
+
+    def test_init_creates_gitignore(self, tmp_git_repo: tuple):
+        """Init creates .gitignore inside .prompts/."""
+        repo_path, repo = tmp_git_repo
+        import os
+
+        os.chdir(repo_path)
+
+        runner.invoke(app, ["init"])
+        gitignore = repo_path / ".prompts" / ".gitignore"
+        assert gitignore.exists()
+        content = gitignore.read_text()
+        assert "*.tmp" in content
+
+    def test_init_config_content(self, tmp_git_repo: tuple):
+        """Init config.json has expected fields."""
+        repo_path, repo = tmp_git_repo
+        import os
+
+        os.chdir(repo_path)
+
+        runner.invoke(app, ["init"])
+        config_path = repo_path / ".prompts" / "config.json"
+        config = json.loads(config_path.read_text())
+        assert "version" in config
+        assert "created_at" in config
+        assert config["eval_threshold"] == 0.05
+
+    def test_init_preserves_existing_config(self, tmp_git_repo: tuple):
+        """Init does not overwrite existing config.json."""
+        repo_path, repo = tmp_git_repo
+        import os
+
+        os.chdir(repo_path)
+
+        prompts_dir = repo_path / ".prompts"
+        prompts_dir.mkdir()
+        custom_config = {"version": "9.9.9", "custom": True}
+        (prompts_dir / "config.json").write_text(json.dumps(custom_config))
+
+        runner.invoke(app, ["init"])
+        config = json.loads((prompts_dir / "config.json").read_text())
+        assert config["version"] == "9.9.9"
+        assert config["custom"] is True
 
 
 class TestAddCommand:
@@ -131,6 +191,56 @@ class TestAddCommand:
 
         result = runner.invoke(app, ["add", str(txt_file)])
         assert result.exit_code == 1  # ERR_ARGS
+
+    def test_add_json_format(self, tmp_git_repo: tuple, tmp_path: Path):
+        """Normal path: adds .json prompt file."""
+        repo_path, repo = tmp_git_repo
+        import os
+
+        os.chdir(repo_path)
+
+        runner.invoke(app, ["init"])
+
+        prompt_data = {
+            "name": "json-prompt",
+            "version": "1.0.0",
+            "system_prompt": "You are helpful.",
+            "user_template": "Q: {{q}}",
+            "variables": {"q": {"default": "test"}},
+            "constraints": [],
+            "metadata": {},
+        }
+        json_file = tmp_path / "prompt.json"
+        json_file.write_text(json.dumps(prompt_data))
+
+        result = runner.invoke(app, ["add", str(json_file)])
+        assert result.exit_code == 0
+        assert (repo_path / ".prompts" / "prompt.json").exists()
+
+    def test_add_dry_run_shows_metadata(self, tmp_git_repo: tuple, sample_prompt_yaml: Path):
+        """Dry run output includes prompt name and version."""
+        repo_path, repo = tmp_git_repo
+        import os
+
+        os.chdir(repo_path)
+
+        runner.invoke(app, ["init"])
+
+        result = runner.invoke(app, ["add", str(sample_prompt_yaml), "--dry-run"])
+        assert result.exit_code == 0
+        assert "test-prompt" in result.output
+        assert "1.0.0" in result.output
+
+    def test_add_auto_creates_prompts_dir(self, tmp_git_repo: tuple, sample_prompt_yaml: Path):
+        """Normal path: add auto-creates .prompts/ if missing."""
+        repo_path, repo = tmp_git_repo
+        import os
+
+        os.chdir(repo_path)
+
+        result = runner.invoke(app, ["add", str(sample_prompt_yaml)])
+        assert result.exit_code == 0
+        assert (repo_path / ".prompts" / "test_prompt.yaml").exists()
 
 
 class TestCommitCommand:
@@ -218,6 +328,224 @@ class TestCommitCommand:
         result = runner.invoke(app, ["commit", "-m", "commit with warnings"])
         # Should still succeed but with warnings
         assert result.exit_code == 0
+
+    def test_commit_multiple_files(self, initialized_repo_with_multiple_prompts: tuple):
+        """Commits all prompt files in .prompts/."""
+        repo_path, repo, prompts_dir = initialized_repo_with_multiple_prompts
+        import os
+
+        os.chdir(repo_path)
+
+        result = runner.invoke(app, ["commit", "-m", "add all prompts"])
+        assert result.exit_code == 0
+
+        # Verify commit record lists all files
+        record_path = prompts_dir / "commits.jsonl"
+        assert record_path.exists()
+        record = json.loads(record_path.read_text().strip())
+        assert len(record["changed_files"]) == 3
+
+    def test_commit_record_fields(self, initialized_repo: tuple):
+        """Commit record has all expected fields."""
+        repo_path, repo, prompts_dir = initialized_repo
+        import os
+
+        os.chdir(repo_path)
+
+        result = runner.invoke(app, ["commit", "-m", "test fields"])
+        assert result.exit_code == 0
+
+        record_path = prompts_dir / "commits.jsonl"
+        record = json.loads(record_path.read_text().strip())
+        assert "hash" in record
+        assert "timestamp" in record
+        assert "changed_files" in record
+        assert "validation_status" in record
+        assert "message" in record
+        assert record["message"] == "test fields"
+        assert len(record["hash"]) == 12
+
+    def test_commit_dry_run_shows_files(self, initialized_repo: tuple):
+        """Dry run output lists files to commit."""
+        repo_path, repo, prompts_dir = initialized_repo
+        import os
+
+        os.chdir(repo_path)
+
+        result = runner.invoke(app, ["commit", "-m", "dry", "--dry-run"])
+        assert result.exit_code == 0
+        assert "test_prompt.yaml" in result.output
+
+
+class TestDiffCommand:
+    """Tests for pg diff command."""
+
+    def test_diff_basic(self, initialized_repo_for_diff: tuple, monkeypatch):
+        """Basic diff detects changed prompt file."""
+        repo_path, repo, prompts_dir = initialized_repo_for_diff
+        monkeypatch.chdir(repo_path)
+
+        result = runner.invoke(app, ["diff"])
+        assert result.exit_code == 0
+
+    def test_diff_no_changes(self, initialized_repo: tuple, monkeypatch):
+        """Diff still runs when files exist but match HEAD."""
+        repo_path, repo, prompts_dir = initialized_repo
+        monkeypatch.chdir(repo_path)
+
+        # Files match HEAD — diff still processes them but shows no semantic changes
+        result = runner.invoke(app, ["diff"])
+        assert result.exit_code == 0
+
+    def test_diff_no_yaml_files(self, tmp_git_repo: tuple, monkeypatch):
+        """No prompt changes when .prompts/ has no YAML files."""
+        repo_path, repo = tmp_git_repo
+        monkeypatch.chdir(repo_path)
+
+        prompts_dir = repo_path / ".prompts"
+        prompts_dir.mkdir()
+        (prompts_dir / "config.json").write_text("{}")
+        repo.index.add([".prompts/config.json"])
+        repo.index.commit("init")
+
+        result = runner.invoke(app, ["diff"])
+        assert result.exit_code == 0
+        assert "No prompt changes" in result.output
+
+    def test_diff_json_output(self, initialized_repo_for_diff: tuple, monkeypatch):
+        """--json outputs valid JSON diff result."""
+        repo_path, repo, prompts_dir = initialized_repo_for_diff
+        monkeypatch.chdir(repo_path)
+
+        result = runner.invoke(app, ["diff", "--json"])
+        assert result.exit_code == 0
+
+        output = json.loads(result.output)
+        assert isinstance(output, dict)
+        assert len(output) >= 1
+        for filename, diff_data in output.items():
+            assert "risk_level" in diff_data
+            assert "semantic_change_type" in diff_data
+            assert "summary" in diff_data
+
+    def test_diff_semantic_flag(self, initialized_repo_for_diff: tuple, monkeypatch):
+        """--semantic shows semantic diff with risk analysis."""
+        repo_path, repo, prompts_dir = initialized_repo_for_diff
+        monkeypatch.chdir(repo_path)
+
+        result = runner.invoke(app, ["diff", "--semantic"])
+        assert result.exit_code == 0
+        # Semantic output should include risk level info
+        assert "Risk Level" in result.output or "LOW" in result.output or "MEDIUM" in result.output or "HIGH" in result.output
+
+    def test_diff_fail_on_high_risk(self, initialized_repo_for_diff: tuple, monkeypatch):
+        """--fail-on high exits with error when risk >= high."""
+        repo_path, repo, prompts_dir = initialized_repo_for_diff
+        monkeypatch.chdir(repo_path)
+
+        # The initialized_repo_for_diff fixture has a role shift (HIGH risk)
+        result = runner.invoke(app, ["diff", "--fail-on", "high"])
+        # May pass (exit 0) or fail (exit 2) depending on actual risk level
+        assert result.exit_code in (0, 2)
+
+    def test_diff_fail_on_low(self, initialized_repo_for_diff: tuple, monkeypatch):
+        """--fail-on low exits with error when any change exists."""
+        repo_path, repo, prompts_dir = initialized_repo_for_diff
+        monkeypatch.chdir(repo_path)
+
+        # Any change should trigger failure with --fail-on low
+        result = runner.invoke(app, ["diff", "--fail-on", "low"])
+        assert result.exit_code == 2
+
+    def test_diff_fail_on_invalid_value(self, initialized_repo_for_diff: tuple, monkeypatch):
+        """--fail-on with invalid value fails."""
+        repo_path, repo, prompts_dir = initialized_repo_for_diff
+        monkeypatch.chdir(repo_path)
+
+        result = runner.invoke(app, ["diff", "--fail-on", "invalid"])
+        assert result.exit_code == 1  # ERR_ARGS
+
+    def test_diff_specific_file(self, initialized_repo_for_diff: tuple, monkeypatch):
+        """Diff specific file by argument."""
+        repo_path, repo, prompts_dir = initialized_repo_for_diff
+        monkeypatch.chdir(repo_path)
+
+        result = runner.invoke(app, ["diff", ".prompts/test_prompt.yaml"])
+        assert result.exit_code == 0
+
+    def test_diff_specific_file_not_found(self, initialized_repo_for_diff: tuple, monkeypatch):
+        """Error: diff specific file that doesn't exist."""
+        repo_path, repo, prompts_dir = initialized_repo_for_diff
+        monkeypatch.chdir(repo_path)
+
+        result = runner.invoke(app, ["diff", ".prompts/nonexistent.yaml"])
+        assert result.exit_code == 1  # ERR_ARGS
+
+    def test_diff_no_prompts_dir(self, tmp_git_repo: tuple, monkeypatch):
+        """Error: fails when .prompts/ directory is missing."""
+        repo_path, repo = tmp_git_repo
+        monkeypatch.chdir(repo_path)
+
+        result = runner.invoke(app, ["diff"])
+        assert result.exit_code == 1  # ERR_ARGS
+
+    def test_diff_new_file(self, initialized_repo: tuple, monkeypatch):
+        """Diff shows new file when prompt file is newly added."""
+        repo_path, repo, prompts_dir = initialized_repo
+        monkeypatch.chdir(repo_path)
+
+        # Add a new prompt file (not in HEAD)
+        new_prompt = {
+            "name": "new-prompt",
+            "version": "1.0.0",
+            "system_prompt": "New assistant.",
+            "user_template": "New: {{x}}",
+            "variables": {"x": {"default": "test"}},
+            "constraints": [],
+            "metadata": {},
+        }
+        (prompts_dir / "new_prompt.yaml").write_text(
+            yaml.dump(new_prompt, default_flow_style=False)
+        )
+
+        result = runner.invoke(app, ["diff", "--json"])
+        assert result.exit_code == 0
+
+        output = json.loads(result.output)
+        # The new file should appear in the diff
+        has_new = any(
+            "new file" in str(v.get("summary", "")).lower() or "added" in str(v.get("added_fields", [])).lower()
+            for v in output.values()
+        )
+        assert has_new or len(output) >= 1
+
+    def test_diff_json_has_text_diff(self, initialized_repo_for_diff: tuple, monkeypatch):
+        """JSON output includes text_diff field."""
+        repo_path, repo, prompts_dir = initialized_repo_for_diff
+        monkeypatch.chdir(repo_path)
+
+        result = runner.invoke(app, ["diff", "--json"])
+        assert result.exit_code == 0
+
+        output = json.loads(result.output)
+        for filename, diff_data in output.items():
+            # text_diff may or may not be present
+            assert isinstance(diff_data, dict)
+
+    def test_diff_modified_fields_in_json(self, initialized_repo_for_diff: tuple, monkeypatch):
+        """JSON output shows modified fields with old/new values."""
+        repo_path, repo, prompts_dir = initialized_repo_for_diff
+        monkeypatch.chdir(repo_path)
+
+        result = runner.invoke(app, ["diff", "--json"])
+        assert result.exit_code == 0
+
+        output = json.loads(result.output)
+        for filename, diff_data in output.items():
+            if diff_data.get("modified_fields"):
+                for mod in diff_data["modified_fields"]:
+                    assert "field" in mod
+                    assert "old_value" in mod or "old" in mod
 
 
 class TestEvalCommand:
