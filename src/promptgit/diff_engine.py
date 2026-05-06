@@ -26,6 +26,7 @@ class SemanticChangeType(str, Enum):
     TONE_SHIFT = "tone_shift"
     ROLE_SHIFT = "role_shift"
     INTENT_SHIFT = "intent_shift"
+    MESSAGE_CHANGE = "message_change"
     MIXED = "mixed"
 
 
@@ -368,6 +369,56 @@ def analyze_semantic_changes(
         change_types.add(SemanticChangeType.ROLE_SHIFT)
         summary_parts.append(f"Role shift: {role_desc}")
         risk_factors.append(RiskLevel.HIGH)
+
+    # Check message history changes (multi-turn)
+    old_msgs = old_template.messages
+    new_msgs = new_template.messages
+    if old_msgs != new_msgs:
+        change_types.add(SemanticChangeType.MESSAGE_CHANGE)
+        old_count = len(old_msgs)
+        new_count = len(new_msgs)
+        if old_count != new_count:
+            summary_parts.append(
+                f"Message turns changed: {old_count} -> {new_count}"
+            )
+            # Adding/removing turns is high risk
+            risk_factors.append(RiskLevel.HIGH)
+        else:
+            # Same number of turns, check content changes
+            content_changes = 0
+            for i, (old_msg, new_msg) in enumerate(zip(old_msgs, new_msgs)):
+                if old_msg.get("role") != new_msg.get("role"):
+                    summary_parts.append(
+                        f"messages[{i}] role changed: {old_msg.get('role')} -> {new_msg.get('role')}"
+                    )
+                    risk_factors.append(RiskLevel.HIGH)
+                if old_msg.get("content") != new_msg.get("content"):
+                    content_changes += 1
+            if content_changes and not any(
+                "role changed" in s for s in summary_parts
+            ):
+                summary_parts.append(
+                    f"{content_changes} message content(s) modified"
+                )
+                risk_factors.append(RiskLevel.MEDIUM)
+
+    # Also check variables in message templates
+    old_msg_vars: set[str] = set()
+    new_msg_vars: set[str] = set()
+    for msg in old_msgs:
+        old_msg_vars |= extract_variables(msg.get("content", ""))
+    for msg in new_msgs:
+        new_msg_vars |= extract_variables(msg.get("content", ""))
+    added_msg_vars = new_msg_vars - old_msg_vars
+    removed_msg_vars = old_msg_vars - new_msg_vars
+    if added_msg_vars or removed_msg_vars:
+        if SemanticChangeType.VARIABLE_CHANGE not in change_types:
+            change_types.add(SemanticChangeType.VARIABLE_CHANGE)
+        if added_msg_vars:
+            summary_parts.append(f"Added message variables: {', '.join(added_msg_vars)}")
+        if removed_msg_vars:
+            summary_parts.append(f"Removed message variables: {', '.join(removed_msg_vars)}")
+            risk_factors.append(RiskLevel.HIGH)
 
     # Determine combined change type
     if len(change_types) == 0:

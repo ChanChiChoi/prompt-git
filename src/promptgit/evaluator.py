@@ -24,6 +24,7 @@ class EvalSample:
     input: str
     expected_output: str
     metadata: dict[str, Any] = field(default_factory=dict)
+    messages: list[dict[str, str]] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> EvalSample:
@@ -32,6 +33,7 @@ class EvalSample:
             input=data.get("input", ""),
             expected_output=data.get("expected_output", ""),
             metadata=data.get("metadata", {}),
+            messages=data.get("messages", []),
         )
 
 
@@ -157,18 +159,23 @@ def estimate_tokens(text: str) -> int:
     return int(ascii_count / 4 + cjk_count / 1.5)
 
 
-def rule_based_render(template: PromptTemplate, variables: dict[str, Any]) -> str:
+def rule_based_render(
+    template: PromptTemplate,
+    variables: dict[str, Any],
+    sample_messages: Optional[list[dict[str, str]]] = None,
+) -> str:
     """Render prompt template using rule-based substitution.
 
     Args:
         template: Prompt template.
         variables: Variable values to substitute.
+        sample_messages: Optional per-sample conversation history from dataset.
+            If provided, replaces template.messages for this sample.
 
     Returns:
-        Rendered prompt string.
+        Rendered prompt string. For templates with messages, returns a
+        structured multi-turn conversation text.
     """
-    result = template.user_template
-
     # Merge default variables with provided ones
     merged_vars = {}
     for var_name, var_def in template.variables.items():
@@ -180,11 +187,26 @@ def rule_based_render(template: PromptTemplate, variables: dict[str, Any]) -> st
 
     merged_vars.update(variables)
 
-    # Substitute {{var}} placeholders
-    for var_name, var_value in merged_vars.items():
-        result = result.replace(f"{{{{{var_name}}}}}", str(var_value))
+    def _substitute(text: str) -> str:
+        """Replace {{var}} placeholders in text."""
+        for var_name, var_value in merged_vars.items():
+            text = text.replace(f"{{{{{var_name}}}}}", str(var_value))
+        return text
 
-    # Prepend system prompt
+    # Determine which messages to use: sample-level overrides template-level
+    messages = sample_messages if sample_messages is not None else template.messages
+
+    # Multi-turn: if messages exist, render as structured conversation
+    if messages:
+        parts = [f"[system] {_substitute(template.system_prompt)}"]
+        for msg in messages:
+            parts.append(f"[{msg['role']}] {_substitute(msg['content'])}")
+        # Append current user turn
+        parts.append(f"[user] {_substitute(template.user_template)}")
+        return "\n\n".join(parts)
+
+    # Single-turn: standard rendering
+    result = _substitute(template.user_template)
     full_prompt = f"{template.system_prompt}\n\n{result}"
     return full_prompt
 
@@ -454,13 +476,16 @@ def evaluate_prompts(
         # Extract variables from input (simple heuristic)
         variables = {"input": sample.input, "question": sample.input}
 
+        # Get per-sample messages (empty list means no override)
+        sample_msgs = sample.messages if sample.messages else None
+
         # Render prompts
         if render_fn is not None:
             old_rendered = render_fn(old_template, variables)
             new_rendered = render_fn(new_template, variables)
         else:
-            old_rendered = rule_based_render(old_template, variables)
-            new_rendered = rule_based_render(new_template, variables)
+            old_rendered = rule_based_render(old_template, variables, sample_messages=sample_msgs)
+            new_rendered = rule_based_render(new_template, variables, sample_messages=sample_msgs)
 
         # Estimate tokens
         old_tokens = estimate_tokens(old_rendered)

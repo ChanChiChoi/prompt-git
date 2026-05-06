@@ -48,6 +48,7 @@ class PromptTemplate(BaseModel):
     variables: dict = {}         # 变量定义及默认值
     constraints: list = []       # 行为约束列表
     metadata: dict = {}          # 任意元数据
+    messages: list[dict] = []    # 可选，多轮对话历史 [{role, content}]
 ```
 
 **方法：**
@@ -100,6 +101,7 @@ class SemanticChangeType(str, Enum):
     CONSTRAINT_CHANGE = "constraint_change"  # 约束增删
     TONE_SHIFT = "tone_shift"               # 语气变化
     ROLE_SHIFT = "role_shift"               # 角色变化
+    MESSAGE_CHANGE = "message_change"       # 多轮消息变更
     MINOR = "minor"                          # 其他小改动
 
 class RiskLevel(str, Enum):
@@ -143,11 +145,18 @@ def diff_prompts(
 1. 比较 `name`、`version`、`system_prompt`、`user_template` 逐字段
 2. 比较 `variables` 的 key 集合（added/removed）
 3. 比较 `constraints` 列表（逐项比较）
-4. 判定 `SemanticChangeType`：
+4. 比较 `messages` 列表：
+   - 轮次增删 → `MESSAGE_CHANGE` + HIGH 风险
+   - 角色变化 → `MESSAGE_CHANGE` + HIGH 风险
+   - 内容修改 → `MESSAGE_CHANGE` + MEDIUM 风险
+   - messages 中的变量增删 → `VARIABLE_CHANGE`
+5. 判定 `SemanticChangeType`：
    - 有变量变更 → `VARIABLE_CHANGE`
    - 有约束变更 → `CONSTRAINT_CHANGE`
    - system_prompt 变化大 → `TONE_SHIFT`
    - role 相关字段变化 → `ROLE_SHIFT`
+   - messages 变更 → `MESSAGE_CHANGE`
+   - 多种变更 → `MIXED`
    - 其他 → `MINOR`
 5. 判定 `RiskLevel`：
    - `ROLE_SHIFT` 或变量移除 → `HIGH`
@@ -171,9 +180,10 @@ def render_diff(result: DiffResult, console: Console) -> None
 ```python
 @dataclass
 class EvalSample:
-    input: str                # 输入文本
+    input: str                # 输入文本（当前用户问题）
     expected_output: str      # 期望输出
     metadata: dict = None     # 可选元数据
+    messages: list[dict] = [] # 可选，样本级多轮对话历史（覆盖模板级 messages）
 
 @dataclass
 class SampleResult:
@@ -208,10 +218,15 @@ class EvalResult:
 #### rule_based_render
 
 ```python
-def rule_based_render(template: PromptTemplate, variables: dict) -> str
+def rule_based_render(template: PromptTemplate, variables: dict, sample_messages: list[dict] = None) -> str
 ```
 
-将 `user_template` 中的 `{{variable}}` 替换为 `variables` 中的值。
+将 `user_template` 中的 `{{variable}}` 替换为 `variables` 中的值。如果包含 `messages`（模板级或样本级），渲染为结构化多轮对话文本：`[system] ... [user] ... [assistant] ... [user] ...`。
+
+**消息来源优先级：**
+- 如果传入 `sample_messages`，使用样本级消息（覆盖模板级）
+- 否则使用模板级 `template.messages`
+- 如果都没有，按单轮模式渲染
 
 #### compute_similarity
 
@@ -377,12 +392,13 @@ def call_llm(
     config: LLMConfig,
     prompt: str,
     system_prompt: Optional[str] = None,
+    messages: Optional[list[dict]] = None,
 ) -> str
 ```
 
 **逻辑：**
 1. 导入 `litellm.completion`（失败则提示安装）
-2. 构建 messages 列表（可选 system + user）
+2. 如果传入 `messages`，直接使用；否则构建 messages 列表（可选 system + user）
 3. 调用 `completion(model=..., messages=..., temperature=..., max_tokens=..., api_key=..., api_base=...)`
 4. 返回 `response.choices[0].message.content`
 
@@ -410,10 +426,29 @@ def llm_generate_output(
     config: LLMConfig,
     system_prompt: str,
     user_prompt: str,
+    messages: Optional[list[dict]] = None,
 ) -> tuple[str, int]
 ```
 
-返回 `(output_text, estimated_tokens)`。异常时返回 `("[LLM Error: ...]", 0)`。
+返回 `(output_text, estimated_tokens)`。异常时返回 `("[LLM Error: ...]", 0)`。多轮模板通过 `messages` 参数传入完整对话历史。
+
+#### _build_messages
+
+```python
+def _build_messages(
+    template: PromptTemplate,
+    variables: dict,
+    sample_messages: Optional[list[dict]] = None,
+) -> Optional[list[dict]]
+```
+
+为多轮模板构建 LLM API 所需的 messages 列表。返回 `None` 表示单轮模式。
+
+**逻辑：**
+1. 确定消息来源：`sample_messages` 优先于 `template.messages`
+2. 如果都没有消息，返回 `None`（单轮模式）
+3. 构建消息列表：`[system_prompt] + messages + [user_template]`
+4. 对所有 content 执行 `{{variable}}` 变量替换
 
 #### evaluate_prompts_with_llm
 
@@ -432,8 +467,10 @@ def evaluate_prompts_with_llm(
 **核心逻辑：**
 1. 如果未提供 `judge_config`，使用 `config` 作为评判模型
 2. 遍历 dataset：
-   - `rule_based_render` 渲染 old/new template
-   - `llm_generate_output` 生成 old/new 输出
+   - 获取样本级消息：`sample.messages`（如果有）
+   - `_build_messages` 构建 LLM messages（样本级优先于模板级）
+   - `rule_based_render` 渲染 old/new template（传入 sample_messages）
+   - `llm_generate_output` 生成 old/new 输出（传入 messages）
    - 如果 `use_judge=True`：
      - 调用 `llm_judge_evaluate` 分别评判 old/new（使用 `judge_llm_config`）
      - `score >= 0.7` 视为匹配

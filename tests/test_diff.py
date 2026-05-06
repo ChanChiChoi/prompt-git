@@ -332,3 +332,84 @@ class TestEdgeCases:
 
         result = diff_prompts(old_path, new_path)
         assert result.risk_level == RiskLevel.LOW
+
+
+class TestMessageDiff:
+    """Tests for multi-turn message diff detection."""
+
+    def test_message_turn_count_change_high_risk(self, base_prompt_data, create_prompt_file):
+        """Adding/removing message turns is high risk."""
+        old_data = {**base_prompt_data, "messages": [
+            {"role": "user", "content": "Hi"},
+            {"role": "assistant", "content": "Hello"},
+        ]}
+        new_data = {**base_prompt_data, "messages": [
+            {"role": "user", "content": "Hi"},
+        ]}
+
+        old_path = create_prompt_file(old_data, "old.yaml")
+        new_path = create_prompt_file(new_data, "new.yaml")
+
+        result = diff_prompts(old_path, new_path)
+        assert SemanticChangeType.MESSAGE_CHANGE in result.semantic_change_type.value or \
+               result.semantic_change_type == SemanticChangeType.MESSAGE_CHANGE or \
+               result.semantic_change_type == SemanticChangeType.MIXED
+        assert result.risk_level == RiskLevel.HIGH
+
+    def test_message_content_change_medium_risk(self, base_prompt_data, create_prompt_file):
+        """Modifying message content (same turn count) is medium risk."""
+        old_data = {**base_prompt_data, "messages": [
+            {"role": "user", "content": "What is Python?"},
+            {"role": "assistant", "content": "Python is a language."},
+        ]}
+        new_data = {**base_prompt_data, "messages": [
+            {"role": "user", "content": "What is Python?"},
+            {"role": "assistant", "content": "Python is a programming language."},
+        ]}
+
+        old_path = create_prompt_file(old_data, "old.yaml")
+        new_path = create_prompt_file(new_data, "new.yaml")
+
+        result = diff_prompts(old_path, new_path)
+        assert result.semantic_change_type != SemanticChangeType.NONE
+        assert result.risk_level in (RiskLevel.MEDIUM, RiskLevel.HIGH)
+
+    def test_message_role_change_high_risk(self, base_prompt_data, create_prompt_file):
+        """Changing message role is high risk."""
+        old_data = {**base_prompt_data, "messages": [
+            {"role": "user", "content": "Hello"},
+        ]}
+        new_data = {**base_prompt_data, "messages": [
+            {"role": "assistant", "content": "Hello"},
+        ]}
+
+        old_path = create_prompt_file(old_data, "old.yaml")
+        new_path = create_prompt_file(new_data, "new.yaml")
+
+        result = diff_prompts(old_path, new_path)
+        assert result.risk_level == RiskLevel.HIGH
+
+    def test_no_messages_no_change(self, base_prompt_data, create_prompt_file):
+        """Templates without messages have no message-related changes."""
+        old_data = base_prompt_data.copy()
+        new_data = base_prompt_data.copy()
+
+        old_path = create_prompt_file(old_data, "old.yaml")
+        new_path = create_prompt_file(new_data, "new.yaml")
+
+        result = diff_prompts(old_path, new_path)
+        assert SemanticChangeType.MESSAGE_CHANGE.value not in result.semantic_change_type.value
+
+    def test_adding_messages_field(self, base_prompt_data, create_prompt_file):
+        """Adding messages to a template that had none."""
+        old_data = base_prompt_data.copy()
+        new_data = {**base_prompt_data, "messages": [
+            {"role": "user", "content": "Hi"},
+            {"role": "assistant", "content": "Hello"},
+        ]}
+
+        old_path = create_prompt_file(old_data, "old.yaml")
+        new_path = create_prompt_file(new_data, "new.yaml")
+
+        result = diff_prompts(old_path, new_path)
+        assert result.semantic_change_type != SemanticChangeType.NONE

@@ -205,6 +205,35 @@ pg eval --dataset fixtures/dataset.jsonl --threshold 0.05
 # 如果失败：显示 FAILED 并列出失败样本
 ```
 
+### 多轮对话评估
+
+多轮对话模板在评估时，规则引擎会将 messages 渲染为结构化文本，LLM 模式会将 messages 直接传入 API：
+
+```yaml
+# .prompts/chat.yaml
+name: chat-assistant
+version: "1.0.0"
+system_prompt: "You are a helpful assistant."
+messages:
+  - role: user
+    content: "What is {{topic}}?"
+  - role: assistant
+    content: "{{topic}} is a programming language."
+user_template: "Give me an example of {{topic}}."
+variables:
+  topic:
+    type: string
+    default: "Python"
+```
+
+```bash
+# 规则引擎（离线，渲染为结构化文本）
+pg eval --dataset fixtures/dataset.jsonl
+
+# LLM 增强（messages 直传 API，保留多轮上下文）
+pg eval --dataset fixtures/dataset.jsonl --provider openai --model gpt-4
+```
+
 ---
 
 ## 命令参考
@@ -274,7 +303,7 @@ pg eval -d data.jsonl -t 0.03 --json | jq '.passed'
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `input` | string | 输入文本（用户问题） |
+| `input` | string | 输入文本（当前用户问题） |
 | `expected_output` | string | 期望输出（标准答案） |
 
 ### 可选字段
@@ -282,13 +311,53 @@ pg eval -d data.jsonl -t 0.03 --json | jq '.passed'
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `metadata` | object | 元数据（分类、难度等） |
+| `messages` | array | 多轮对话历史（覆盖模板级 messages） |
+
+### 多轮对话数据集（messages 字段）
+
+对于多轮对话场景，每个样本可以包含独立的对话历史。`messages` 字段会覆盖模板中定义的 `messages`，使每个样本有不同的对话上下文。
+
+**消息来源优先级：**
+1. 样本级 `messages`（数据集 JSONL 中）— 优先使用
+2. 模板级 `messages`（YAML 模板中）— 样本无 messages 时的默认值
+
+```jsonl
+{
+  "input": "How do I filter even numbers?",
+  "expected_output": "Use list comprehension: [x for x in range(10) if x % 2 == 0]",
+  "metadata": {"topic": "list comprehensions"},
+  "messages": [
+    {"role": "user", "content": "I want to learn list comprehensions"},
+    {"role": "assistant", "content": "Great choice! Let's start with the basics."},
+    {"role": "user", "content": "What's the syntax?"},
+    {"role": "assistant", "content": "The syntax is [expression for item in iterable]."}
+  ]
+}
+```
+
+**设计原则：**
+- `input`：当前轮次的用户问题（不变）
+- `messages`：该样本的前置对话历史（每个样本独立）
+- `expected_output`：针对当前 `input` 的期望回答
+
+**使用场景：**
+- 每个样本需要不同的对话上下文（如不同话题的聊天记录）
+- 模拟真实的多轮对话场景
+- 评估模型在不同对话历史下的表现
 
 ### 示例数据集
 
+**单轮数据集：**
 ```jsonl
 {"input": "What is Python?", "expected_output": "Python is a programming language", "metadata": {"category": "definition", "difficulty": "easy"}}
 {"input": "Explain the GIL", "expected_output": "The GIL prevents multiple threads from executing Python bytecode simultaneously", "metadata": {"category": "technical", "difficulty": "hard"}}
 {"input": "", "expected_output": "I need a question to help you.", "metadata": {"category": "edge_case"}}
+```
+
+**多轮数据集（每样本独立历史）：**
+```jsonl
+{"input": "Show me list comprehension for filtering", "expected_output": "[x for x in range(10) if x % 2 == 0]", "metadata": {"topic": "list comprehensions"}, "messages": [{"role": "user", "content": "I want to learn list comprehensions"}, {"role": "assistant", "content": "Let's start with the basics."}]}
+{"input": "How do I merge two dicts?", "expected_output": "Use dict1 | dict2 in Python 3.9+", "metadata": {"topic": "dictionaries"}, "messages": [{"role": "user", "content": "Tell me about dictionaries"}, {"role": "assistant", "content": "Dictionaries store key-value pairs."}]}
 ```
 
 ### 数据集管理
@@ -415,6 +484,7 @@ export PROMPT_GIT_THRESHOLD=0.10
 | **成本** | 免费 | 按 token 计费 | 按 token 计费 x2 |
 | **离线支持** | ✅ | ❌ | ❌ |
 | **适用场景** | 快速验证、CI | 正式评估 | 精确评估 |
+| **多轮对话** | 渲染为结构化文本 | messages 直传 LLM API | messages 直传 LLM API |
 
 ### 规则引擎原理
 

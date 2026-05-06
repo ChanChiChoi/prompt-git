@@ -406,3 +406,122 @@ class TestEdgeCases:
         ]
         result = evaluate_prompts(template, template, dataset)
         assert 0 <= result.consistency_score <= 1
+
+
+class TestMultiTurnRender:
+    """Tests for multi-turn message rendering."""
+
+    def test_messages_render_structured(self):
+        """Multi-turn template renders as structured conversation."""
+        data = {
+            "name": "multi-turn",
+            "version": "1.0.0",
+            "system_prompt": "You are a helpful assistant.",
+            "user_template": "{{current}}",
+            "variables": {
+                "h1": {"default": "What is Python?"},
+                "a1": {"default": "Python is a programming language."},
+                "current": {"default": "Tell me more."},
+            },
+            "constraints": [],
+            "metadata": {},
+            "messages": [
+                {"role": "user", "content": "{{h1}}"},
+                {"role": "assistant", "content": "{{a1}}"},
+            ],
+        }
+        template = PromptTemplate.model_validate(data)
+        rendered = rule_based_render(template, {"current": "Tell me more."})
+
+        assert "[system] You are a helpful assistant." in rendered
+        assert "[user] What is Python?" in rendered
+        assert "[assistant] Python is a programming language." in rendered
+        assert "[user] Tell me more." in rendered
+
+    def test_messages_with_variables(self):
+        """Message content supports variable substitution."""
+        data = {
+            "name": "multi-turn",
+            "version": "1.0.0",
+            "system_prompt": "You are a bot.",
+            "user_template": "{{question}}",
+            "variables": {"topic": {"default": "Python"}},
+            "constraints": [],
+            "metadata": {},
+            "messages": [
+                {"role": "user", "content": "What is {{topic}}?"},
+                {"role": "assistant", "content": "{{topic}} is great."},
+            ],
+        }
+        template = PromptTemplate.model_validate(data)
+        rendered = rule_based_render(template, {"question": "Go on."})
+
+        assert "What is Python?" in rendered
+        assert "Python is great." in rendered
+
+    def test_single_turn_no_messages(self):
+        """Template without messages renders as single-turn."""
+        data = {
+            "name": "single",
+            "version": "1.0.0",
+            "system_prompt": "You are helpful.",
+            "user_template": "Hello",
+            "variables": {},
+            "constraints": [],
+            "metadata": {},
+        }
+        template = PromptTemplate.model_validate(data)
+        rendered = rule_based_render(template, {})
+        assert "[system]" not in rendered
+        assert rendered == "You are helpful.\n\nHello"
+
+    def test_evaluate_prompts_with_messages(self):
+        """evaluate_prompts works with multi-turn templates."""
+        data = {
+            "name": "mt",
+            "version": "1.0.0",
+            "system_prompt": "You are a Python expert.",
+            "user_template": "{{question}}",
+            "variables": {"question": {"default": "What is Python?"}},
+            "constraints": [],
+            "metadata": {},
+            "messages": [
+                {"role": "user", "content": "Hi"},
+                {"role": "assistant", "content": "Hello! How can I help?"},
+            ],
+        }
+        template = PromptTemplate.model_validate(data)
+        dataset = [EvalSample(input="What is Python?", expected_output="Python is a language")]
+        result = evaluate_prompts(template, template, dataset)
+        assert result.total_samples == 1
+        assert isinstance(result.passed, bool)
+
+    def test_messages_validation_bad_role(self):
+        """Invalid role in messages raises validation error."""
+        data = {
+            "name": "bad",
+            "version": "1.0.0",
+            "system_prompt": "sys",
+            "user_template": "hello",
+            "variables": {},
+            "constraints": [],
+            "metadata": {},
+            "messages": [{"role": "invalid", "content": "test"}],
+        }
+        with pytest.raises(Exception):
+            PromptTemplate.model_validate(data)
+
+    def test_messages_validation_empty_content(self):
+        """Empty content in messages raises validation error."""
+        data = {
+            "name": "bad",
+            "version": "1.0.0",
+            "system_prompt": "sys",
+            "user_template": "hello",
+            "variables": {},
+            "constraints": [],
+            "metadata": {},
+            "messages": [{"role": "user", "content": ""}],
+        }
+        with pytest.raises(Exception):
+            PromptTemplate.model_validate(data)

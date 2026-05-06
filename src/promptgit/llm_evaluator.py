@@ -183,13 +183,17 @@ def call_llm(
     config: LLMConfig,
     prompt: str,
     system_prompt: Optional[str] = None,
+    messages: Optional[list[dict[str, str]]] = None,
 ) -> str:
     """Call LLM using LiteLLM.
 
     Args:
         config: LLM configuration
-        prompt: User prompt
-        system_prompt: System prompt (optional)
+        prompt: User prompt (ignored if messages is provided)
+        system_prompt: System prompt (ignored if messages is provided)
+        messages: Optional pre-built message list for multi-turn conversations.
+            Each dict must have 'role' and 'content'. If provided, prompt and
+            system_prompt are ignored.
 
     Returns:
         LLM response text
@@ -206,10 +210,11 @@ def call_llm(
             "Install it with: pip install litellm"
         )
 
-    messages = []
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-    messages.append({"role": "user", "content": prompt})
+    if messages is None:
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
 
     # Prepare kwargs
     kwargs = {
@@ -292,23 +297,60 @@ def llm_generate_output(
     config: LLMConfig,
     system_prompt: str,
     user_prompt: str,
+    messages: Optional[list[dict[str, str]]] = None,
 ) -> tuple[str, int]:
     """Generate output using LLM.
 
     Args:
         config: LLM configuration
-        system_prompt: System prompt
-        user_prompt: User prompt
+        system_prompt: System prompt (ignored if messages is provided)
+        user_prompt: User prompt (ignored if messages is provided)
+        messages: Optional pre-built message list for multi-turn conversations.
 
     Returns:
         Tuple of (output_text, estimated_tokens)
     """
     try:
-        output = call_llm(config, user_prompt, system_prompt=system_prompt)
+        output = call_llm(config, user_prompt, system_prompt=system_prompt, messages=messages)
         tokens = estimate_tokens(output)
         return output, tokens
     except Exception as e:
         return f"[LLM Error: {e}]", 0
+
+
+def _build_messages(
+    template: PromptTemplate,
+    variables: dict[str, Any],
+    sample_messages: Optional[list[dict[str, str]]] = None,
+) -> Optional[list[dict[str, str]]]:
+    """Build message list for multi-turn templates.
+
+    Args:
+        template: Prompt template with optional messages field.
+        variables: Variable values to substitute.
+        sample_messages: Optional per-sample conversation history from dataset.
+            If provided, replaces template.messages for this sample.
+
+    Returns:
+        Message list for LLM API, or None if template is single-turn and no sample messages.
+    """
+    # Determine which messages to use: sample-level overrides template-level
+    messages = sample_messages if sample_messages is not None else template.messages
+
+    if not messages:
+        return None
+
+    def _substitute(text: str) -> str:
+        for var_name, var_value in variables.items():
+            text = text.replace(f"{{{{{var_name}}}}}", str(var_value))
+        return text
+
+    result: list[dict[str, str]] = []
+    result.append({"role": "system", "content": _substitute(template.system_prompt)})
+    for msg in messages:
+        result.append({"role": msg["role"], "content": _substitute(msg["content"])})
+    result.append({"role": "user", "content": _substitute(template.user_template)})
+    return result
 
 
 def evaluate_prompts_with_llm(
@@ -351,16 +393,25 @@ def evaluate_prompts_with_llm(
     for sample in dataset:
         variables = {"input": sample.input, "question": sample.input}
 
-        # Render prompts
+        # Get per-sample messages (empty list means no override)
+        sample_msgs = sample.messages if sample.messages else None
+
+        # Build messages for multi-turn templates
+        old_messages = _build_messages(old_template, variables, sample_messages=sample_msgs)
+        new_messages = _build_messages(new_template, variables, sample_messages=sample_msgs)
+
+        # Render prompts (for judge and similarity comparison)
         old_rendered = rule_based_render(old_template, variables)
         new_rendered = rule_based_render(new_template, variables)
 
         # Generate outputs using LLM
         old_output, old_tokens = llm_generate_output(
-            config, old_template.system_prompt, old_rendered
+            config, old_template.system_prompt, old_rendered,
+            messages=old_messages,
         )
         new_output, new_tokens = llm_generate_output(
-            config, new_template.system_prompt, new_rendered
+            config, new_template.system_prompt, new_rendered,
+            messages=new_messages,
         )
 
         old_total_tokens += old_tokens
@@ -456,11 +507,15 @@ def compare_models(
 
     for sample in dataset:
         variables = {"input": sample.input, "question": sample.input}
-        rendered = rule_based_render(template, variables)
+        sample_msgs = sample.messages if sample.messages else None
+        rendered = rule_based_render(template, variables, sample_messages=sample_msgs)
+
+        # Build messages for multi-turn
+        messages = _build_messages(template, variables, sample_messages=sample_msgs)
 
         # Generate outputs from both models
-        output_a, _ = llm_generate_output(config_a, template.system_prompt, rendered)
-        output_b, _ = llm_generate_output(config_b, template.system_prompt, rendered)
+        output_a, _ = llm_generate_output(config_a, template.system_prompt, rendered, messages=messages)
+        output_b, _ = llm_generate_output(config_b, template.system_prompt, rendered, messages=messages)
 
         # Compare using LLM-as-judge
         judge_prompt = f"""Compare these two AI responses and determine which is better.

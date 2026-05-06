@@ -112,9 +112,10 @@ class PromptTemplate(BaseModel):
     variables: dict[str, Any]    # 变量定义及默认值
     constraints: list[str]       # 行为约束列表
     metadata: dict[str, Any]     # 任意元数据
+    messages: list[dict]         # 可选，多轮对话历史 [{role, content}]
 ```
 
-**YAML 示例：**
+**YAML 示例（单轮）：**
 
 ```yaml
 name: qa-assistant
@@ -130,6 +131,24 @@ constraints:
   - Use examples
 metadata:
   author: team-name
+```
+
+**YAML 示例（多轮）：**
+
+```yaml
+name: multi-turn-assistant
+version: "1.0.0"
+system_prompt: "You are a helpful assistant."
+messages:
+  - role: user
+    content: "What is {{topic}}?"
+  - role: assistant
+    content: "{{topic}} is a programming language."
+user_template: "Tell me more about {{topic}}."
+variables:
+  topic:
+    type: string
+    default: "Python"
 ```
 
 ### CommitRecord

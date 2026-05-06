@@ -546,3 +546,116 @@ class TestCompareModels:
         results = compare_models(template, dataset, config_a, config_b)
 
         assert len(results) == 3
+
+
+# ============================================================
+# Multi-turn LLM Tests
+# ============================================================
+
+
+class TestMultiTurnLLM:
+    """Tests for multi-turn conversation LLM support."""
+
+    def create_multi_turn_template(self):
+        """Create a template with message history."""
+        return PromptTemplate.model_validate({
+            "name": "multi-turn",
+            "version": "1.0.0",
+            "system_prompt": "You are a helpful assistant.",
+            "user_template": "{{question}}",
+            "variables": {"question": {"default": "What is Python?"}},
+            "constraints": [],
+            "metadata": {},
+            "messages": [
+                {"role": "user", "content": "Hi there"},
+                {"role": "assistant", "content": "Hello! How can I help?"},
+            ],
+        })
+
+    def test_build_messages_multi_turn(self):
+        """_build_messages returns message list for multi-turn template."""
+        from promptgit.llm_evaluator import _build_messages
+
+        template = self.create_multi_turn_template()
+        messages = _build_messages(template, {"question": "What is Python?"})
+
+        assert messages is not None
+        assert len(messages) == 4  # system + 2 history + user
+        assert messages[0]["role"] == "system"
+        assert messages[1]["role"] == "user"
+        assert messages[2]["role"] == "assistant"
+        assert messages[3]["role"] == "user"
+        assert "What is Python?" in messages[3]["content"]
+
+    def test_build_messages_single_turn(self):
+        """_build_messages returns None for single-turn template."""
+        from promptgit.llm_evaluator import _build_messages
+
+        template = PromptTemplate.model_validate({
+            "name": "single",
+            "version": "1.0.0",
+            "system_prompt": "sys",
+            "user_template": "hello",
+            "variables": {},
+            "constraints": [],
+            "metadata": {},
+        })
+        messages = _build_messages(template, {})
+        assert messages is None
+
+    @patch("litellm.completion")
+    def test_call_llm_with_messages(self, mock_completion):
+        """call_llm passes messages list directly when provided."""
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "Response"
+        mock_completion.return_value = mock_response
+
+        config = LLMConfig(provider="openai", model="gpt-4")
+        messages = [
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": "hello"},
+            {"role": "user", "content": "bye"},
+        ]
+        result = call_llm(config, "ignored", system_prompt="ignored", messages=messages)
+
+        assert result == "Response"
+        call_args = mock_completion.call_args
+        assert call_args.kwargs["messages"] == messages
+
+    @patch("promptgit.llm_evaluator.call_llm")
+    def test_llm_generate_output_with_messages(self, mock_call_llm):
+        """llm_generate_output passes messages to call_llm."""
+        mock_call_llm.return_value = "output text"
+
+        config = LLMConfig(provider="openai", model="gpt-4")
+        messages = [{"role": "user", "content": "hi"}]
+        output, tokens = llm_generate_output(config, "sys", "user", messages=messages)
+
+        assert output == "output text"
+        assert tokens > 0
+        mock_call_llm.assert_called_once_with(
+            config, "user", system_prompt="sys", messages=messages
+        )
+
+    @patch("promptgit.llm_evaluator.call_llm")
+    def test_evaluate_prompts_with_llm_multi_turn(self, mock_call_llm):
+        """evaluate_prompts_with_llm works with multi-turn templates."""
+        mock_call_llm.return_value = "Python is a programming language."
+
+        template = self.create_multi_turn_template()
+        dataset = [
+            EvalSample(input="What is Python?", expected_output="Python is a programming language"),
+        ]
+        config = LLMConfig(provider="openai", model="gpt-4")
+
+        result = evaluate_prompts_with_llm(template, template, dataset, config)
+
+        assert result.total_samples == 1
+        assert isinstance(result.passed, bool)
+        # Verify call_llm was called with messages (not just prompt string)
+        first_call = mock_call_llm.call_args_list[0]
+        assert first_call.kwargs.get("messages") is not None or \
+               (len(first_call.args) > 3 and first_call.args[3] is not None) or \
+               first_call.kwargs.get("messages") is not None

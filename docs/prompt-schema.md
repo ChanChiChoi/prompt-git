@@ -50,6 +50,7 @@
 | `variables` | object | `{}` | 变量定义 |
 | `constraints` | array | `[]` | 行为约束 |
 | `metadata` | object | `{}` | 任意元数据 |
+| `messages` | array | `[]` | 多轮对话历史（可选） |
 
 ### YAML 示例
 
@@ -275,6 +276,84 @@ metadata:
 2. **过滤搜索**：按类别、标签筛选
 3. **CI 配置**：指定模型、参数等
 4. **审计追踪**：记录作者、审批状态
+
+---
+
+## 多轮对话历史（messages）
+
+### 消息格式
+
+`messages` 是一个可选字段，用于定义多轮对话历史。每个条目包含 `role` 和 `content`：
+
+```yaml
+messages:
+  - role: user
+    content: "历史问题"
+  - role: assistant
+    content: "历史回答"
+```
+
+### 支持的角色
+
+| 角色 | 说明 |
+|------|------|
+| `user` | 用户消息 |
+| `assistant` | 助手回复 |
+| `system` | 系统指令（额外的系统提示） |
+
+### 变量支持
+
+`messages` 中的 `content` 支持 `{{变量}}` 占位符，与 `user_template` 使用相同的变量池：
+
+```yaml
+messages:
+  - role: user
+    content: "什么是{{topic}}？"
+  - role: assistant
+    content: "{{topic}}是一种编程语言。"
+user_template: "请继续介绍{{topic}}的特性。"
+variables:
+  topic:
+    type: string
+    default: "Python"
+```
+
+### 完整示例
+
+```yaml
+name: multi-turn-assistant
+version: "1.0.0"
+system_prompt: "You are a helpful coding assistant."
+messages:
+  - role: user
+    content: "我想学习{{language}}"
+  - role: assistant
+    content: "好的！{{language}}是一门很好的语言。你想从哪里开始？"
+  - role: user
+    content: "先讲讲基础语法吧"
+  - role: assistant
+    content: "当然，{{language}}的基础语法包括变量、函数、控制流等。"
+user_template: "{{current_question}}"
+variables:
+  language:
+    type: string
+    default: "Python"
+  current_question:
+    type: string
+    default: "能给我一个例子吗？"
+constraints:
+  - 回答要简洁明了
+  - 提供代码示例
+metadata:
+  author: dev-team
+  category: tutoring
+```
+
+### 评估行为
+
+- **规则引擎**：渲染为结构化文本 `[system] ... [user] ... [assistant] ... [user] ...`，然后进行关键词匹配
+- **LLM 增强**：构建完整的 messages 列表直接传入 LLM API，保留多轮对话上下文
+- **Diff**：检测轮次增删（HIGH 风险）、角色变化（HIGH 风险）、内容修改（MEDIUM 风险）
 
 ---
 

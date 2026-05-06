@@ -71,6 +71,27 @@ data = {
 template = PromptTemplate.model_validate(data)
 ```
 
+### 多轮对话模板
+
+```python
+data = {
+    "name": "multi-turn",
+    "version": "1.0.0",
+    "system_prompt": "You are a helpful assistant.",
+    "messages": [
+        {"role": "user", "content": "What is {{topic}}?"},
+        {"role": "assistant", "content": "{{topic}} is great."},
+    ],
+    "user_template": "Tell me more about {{topic}}.",
+    "variables": {"topic": {"type": "string", "default": "Python"}},
+    "constraints": [],
+    "metadata": {},
+}
+
+template = PromptTemplate.model_validate(data)
+print(template.messages)  # [{'role': 'user', 'content': 'What is {{topic}}?'}, ...]
+```
+
 ### CommitRecord
 
 提交记录模型。
@@ -196,10 +217,53 @@ samples = load_dataset(Path("fixtures/dataset.jsonl"))
 
 # 访问样本
 for sample in samples:
-    print(sample.input)           # str
-    print(sample.expected_output) # str
-    print(sample.metadata)        # dict
+    print(sample.input)           # str - 当前用户问题
+    print(sample.expected_output) # str - 期望输出
+    print(sample.metadata)        # dict - 元数据
+    print(sample.messages)        # list - 多轮对话历史（可选）
 ```
+
+### EvalSample
+
+评估样本数据模型。
+
+```python
+from promptgit.evaluator import EvalSample
+
+# 创建单轮样本
+sample = EvalSample(
+    input="What is Python?",
+    expected_output="Python is a programming language",
+    metadata={"difficulty": "easy"}
+)
+
+# 创建多轮样本（带对话历史）
+sample = EvalSample(
+    input="Show me an example",
+    expected_output="Here's an example...",
+    metadata={"topic": "list comprehensions"},
+    messages=[
+        {"role": "user", "content": "I want to learn list comprehensions"},
+        {"role": "assistant", "content": "Great choice! Let's start."},
+        {"role": "user", "content": "What's the syntax?"},
+        {"role": "assistant", "content": "The syntax is [expr for item in iterable]."},
+    ]
+)
+
+# 从字典创建
+sample = EvalSample.from_dict({
+    "input": "How do I filter?",
+    "expected_output": "Use if clause",
+    "metadata": {},
+    "messages": [{"role": "user", "content": "Tell me about filtering"}]
+})
+```
+
+**messages 字段说明：**
+- 可选字段，默认为空列表
+- 格式：`[{"role": "user"|"assistant"|"system", "content": "..."}]`
+- 优先级：样本级 messages 覆盖模板级 messages
+- 用途：为每个样本提供独立的对话历史上下文
 
 ### evaluate_prompts
 
@@ -353,6 +417,23 @@ tokens = estimate_tokens("Hello, how are you?")
 # 计算文本相似度
 similarity = compute_similarity("hello world", "hello there")
 # 约 0.6
+
+# 规则渲染（单轮）
+from promptgit.schema import PromptTemplate
+template = PromptTemplate.model_validate({...})
+rendered = rule_based_render(template, {"question": "What is Python?"})
+
+# 规则渲染（多轮 - 使用样本级 messages 覆盖模板级）
+sample_messages = [
+    {"role": "user", "content": "I want to learn Python"},
+    {"role": "assistant", "content": "Great! Let's start."},
+]
+rendered = rule_based_render(
+    template,
+    {"question": "What is Python?"},
+    sample_messages=sample_messages  # 覆盖 template.messages
+)
+```
 
 # 提取关键词
 keywords = extract_keywords("Python is a programming language")

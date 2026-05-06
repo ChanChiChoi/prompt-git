@@ -32,6 +32,10 @@ class PromptTemplate(BaseModel):
     metadata: dict[str, Any] = Field(
         default_factory=dict, description="Arbitrary metadata"
     )
+    messages: list[dict[str, str]] = Field(
+        default_factory=list,
+        description="Multi-turn message history. Each dict must have 'role' (user/assistant/system) and 'content'.",
+    )
 
     @field_validator("user_template")
     @classmethod
@@ -40,6 +44,24 @@ class PromptTemplate(BaseModel):
         import re
 
         placeholders = set(re.findall(r"\{\{(\w+)\}\}", v))
+        return v
+
+    @field_validator("messages")
+    @classmethod
+    def validate_messages(cls, v: list[dict[str, str]]) -> list[dict[str, str]]:
+        """Validate message history entries."""
+        valid_roles = {"user", "assistant", "system"}
+        for i, msg in enumerate(v):
+            if not isinstance(msg, dict):
+                raise ValueError(f"messages[{i}] must be a dict, got {type(msg).__name__}")
+            role = msg.get("role")
+            if role not in valid_roles:
+                raise ValueError(
+                    f"messages[{i}].role must be one of {valid_roles}, got '{role}'"
+                )
+            content = msg.get("content")
+            if not isinstance(content, str) or not content:
+                raise ValueError(f"messages[{i}].content must be a non-empty string")
         return v
 
     @classmethod

@@ -85,7 +85,52 @@ pg eval --dataset data.jsonl --provider ollama --model llama2
 pg diff --fail-on=high
 ```
 
-### v0.2.1 - 增强 Diff
+### v0.2.1 - 多轮对话支持
+
+**目标：** 扩展 PromptTemplate 支持多轮对话场景
+
+```
+[x] schema: 新增可选 messages 字段（role + content 列表）
+[x] evaluator: rule_based_render 支持 messages 渲染（历史 + 当前轮次拼接）
+[x] diff_engine: 多轮模板的语义 Diff（检测历史轮次变更、角色变化等）
+[x] llm_evaluator: 支持 messages 格式直接传入 LLM API
+[x] 文档更新: 多轮对话最佳实践和示例
+```
+
+**示例：**
+```yaml
+name: multi-turn-agent
+version: "1.0.0"
+system_prompt: "You are a helpful assistant."
+messages:
+  - role: user
+    content: "{{history_q1}}"
+  - role: assistant
+    content: "{{history_a1}}"
+  - role: user
+    content: "{{history_q2}}"
+  - role: assistant
+    content: "{{history_a2}}"
+user_template: "{{current_question}}"
+variables:
+  history_q1:
+    type: string
+    description: "历史问题 1"
+  history_a1:
+    type: string
+    description: "历史回答 1"
+  history_q2:
+    type: string
+    description: "历史问题 2"
+  history_a2:
+    type: string
+    description: "历史回答 2"
+  current_question:
+    type: string
+    description: "当前问题"
+```
+
+### v0.2.2 - 增强 Diff
 
 **目标：** 更智能的语义分析
 
@@ -96,7 +141,7 @@ pg diff --fail-on=high
 [ ] 自定义检测规则
 ```
 
-### v0.2.2 - 数据集增强
+### v0.2.3 - 数据集增强
 
 **目标：** 更好的数据集管理
 
@@ -236,8 +281,10 @@ prompt-git-manager (核心)
 | 版本 | 预计时间 | 主题 | 状态 |
 |------|---------|------|------|
 | v0.2.0 | 2026 Q1 | LLM 评估 | ✅ 已完成 |
-| v0.2.1 | 2026 Q1 | 增强 Diff | 待开发 |
-| v0.3.0 | 2026 Q2 | 多 Prompt | 待开发 |
+| v0.2.1 | 2026 Q2 | 多轮对话支持 | ✅ 已完成 |
+| v0.2.2 | 2026 Q2 | 增强 Diff | 待开发 |
+| v0.2.3 | 2026 Q2 | 数据集增强 | 待开发 |
+| v0.3.0 | 2026 Q3 | 多 Prompt | 待开发 |
 | v0.4.0 | 2026 Q3 | 团队协作 | 待开发 |
 | v1.0.0 | 2026 Q4 | 正式版 | 待开发 |
 
