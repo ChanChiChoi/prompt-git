@@ -151,6 +151,15 @@ git log --oneline .prompts/
 {"input": "对抗输入", "expected_output": "...", "metadata": {"category": "adversarial"}}
 ```
 
+**多轮对话数据集：**
+
+```jsonl
+// 每个样本可包含独立的对话历史
+{"input": "当前问题", "expected_output": "...", "metadata": {}, "messages": [{"role": "user", "content": "历史问题"}, {"role": "assistant", "content": "历史回答"}]}
+```
+
+> `messages` 字段覆盖模板级 messages，使每个样本有不同的对话上下文。
+
 ### 2. 阈值设置
 
 ```bash

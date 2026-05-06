@@ -61,9 +61,11 @@
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `metadata` | object | 任意元数据 |
+| `messages` | array | 多轮对话历史（覆盖模板级 messages） |
 
 ### 完整示例
 
+**单轮样本：**
 ```json
 {
   "input": "What is Python?",
@@ -75,6 +77,37 @@
   }
 }
 ```
+
+**多轮样本（带对话历史）：**
+```json
+{
+  "input": "Show me a practical example",
+  "expected_output": "Here's a list comprehension: [x for x in range(10) if x % 2 == 0]",
+  "metadata": {
+    "topic": "list comprehensions",
+    "difficulty": "easy"
+  },
+  "messages": [
+    {"role": "user", "content": "I want to learn list comprehensions"},
+    {"role": "assistant", "content": "Great choice! Let's start with the basics."},
+    {"role": "user", "content": "What's the syntax?"},
+    {"role": "assistant", "content": "The syntax is [expression for item in iterable]."}
+  ]
+}
+```
+
+### messages 字段说明
+
+`messages` 用于为每个样本提供独立的对话历史上下文：
+
+- **格式**：`[{"role": "user"|"assistant"|"system", "content": "..."}]`
+- **优先级**：样本级 `messages` 覆盖模板级 `messages`
+- **用途**：每个样本有不同的对话背景时使用
+
+**消息来源优先级：**
+1. 样本级 `messages`（数据集 JSONL 中）— 优先使用
+2. 模板级 `messages`（YAML 模板中）— 样本无 messages 时的默认值
+3. 无 messages — 单轮模式
 
 ### Metadata 推荐字段
 
@@ -349,6 +382,16 @@ sample_dataset('dataset.jsonl', n=5)
 ```jsonl
 {"input": "什么是Python？", "expected_output": "Python是一种高级编程语言，以其可读性著称。", "metadata": {"category": "定义", "difficulty": "easy", "language": "zh"}}
 {"input": "如何学习编程？", "expected_output": "学习编程建议：1.选择一门语言 2.多练习 3.做项目 4.阅读他人代码", "metadata": {"category": "建议", "difficulty": "medium", "language": "zh"}}
+```
+
+### 多轮对话数据集
+
+每个样本包含独立的对话历史，`input` 为当前问题：
+
+```jsonl
+{"input": "Show me how to filter even numbers", "expected_output": "[x for x in range(10) if x % 2 == 0]", "metadata": {"topic": "list comprehensions", "difficulty": "easy"}, "messages": [{"role": "user", "content": "I want to learn list comprehensions"}, {"role": "assistant", "content": "Great choice! Let's start with the basics."}, {"role": "user", "content": "What's the syntax?"}, {"role": "assistant", "content": "The syntax is [expr for item in iterable]."}]}
+{"input": "How do I merge two dicts?", "expected_output": "Use dict1 | dict2 in Python 3.9+", "metadata": {"topic": "dictionaries", "difficulty": "easy"}, "messages": [{"role": "user", "content": "Tell me about dictionaries"}, {"role": "assistant", "content": "Dictionaries store key-value pairs."}]}
+{"input": "What about exception handling?", "expected_output": "Use try/except blocks to handle exceptions.", "metadata": {"topic": "exception handling", "difficulty": "medium"}, "messages": [{"role": "user", "content": "My program keeps crashing"}, {"role": "assistant", "content": "You need exception handling!"}]}
 ```
 
 ---

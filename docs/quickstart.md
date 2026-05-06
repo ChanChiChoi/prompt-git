@@ -70,6 +70,9 @@ EOF
 - `system_prompt`：系统提示词
 - `user_template`：用户消息模板（支持 `{{变量}}`）
 
+**可选字段：**
+- `messages`：多轮对话历史（`[{role, content}]`），用于多轮对话场景
+
 ---
 
 ## 4. 添加到版本追踪

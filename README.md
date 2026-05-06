@@ -646,6 +646,7 @@ name: string
 version: string
 system_prompt: string
 user_template: string  # with {{variables}}
+messages: []           # optional, multi-turn history [{role, content}]
 variables: {}
 constraints: []
 metadata: {}

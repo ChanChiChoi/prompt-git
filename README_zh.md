@@ -646,6 +646,7 @@ name: string           # 必填
 version: string        # 可选
 system_prompt: string  # 必填
 user_template: string  # 必填，支持 {{variables}}
+messages: []           # 可选，多轮对话历史 [{role, content}]
 variables: {}          # 可选
 constraints: []        # 可选
 metadata: {}           # 可选
